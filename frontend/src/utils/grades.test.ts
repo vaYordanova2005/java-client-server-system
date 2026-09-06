@@ -88,6 +88,24 @@ describe('classifySessionTypes', () => {
   it('returns an empty map for no grades', () => {
     expect(classifySessionTypes([]).size).toBe(0);
   });
+
+  it('without a student-aware keyFn, wrongly mixes different students in the same semester+subject', () => {
+    // Regression guard for the bug a naive reuse in a multi-student (teacher)
+    // view would introduce: the default keyFn alone cannot tell these apart.
+    const first = { ...grade({ createdAt: '2024-01-10T09:00:00Z' }), studentUsername: 'a@uni-sofia.bg' };
+    const second = { ...grade({ createdAt: '2024-02-10T09:00:00Z' }), studentUsername: 'b@uni-sofia.bg' };
+
+    const naive = classifySessionTypes([first, second]);
+    expect(naive.get(first.id)).toBe('regular');
+    expect(naive.get(second.id)).toBe('retake'); // wrong: b's own first grade, not a retake
+
+    const studentAware = classifySessionTypes(
+      [first, second],
+      (g) => `${g.studentUsername}::${g.semester}::${g.subject}`
+    );
+    expect(studentAware.get(first.id)).toBe('regular');
+    expect(studentAware.get(second.id)).toBe('regular');
+  });
 });
 
 describe('byCreatedAt', () => {

@@ -47,7 +47,9 @@ class AdminStudentProfileTest {
 
     private User admin;
     private User studentUser;
+    private User otherStudentUser;
     private String studentUsername;
+    private String otherStudentUsername;
 
     @BeforeEach
     void setUp() {
@@ -55,17 +57,25 @@ class AdminStudentProfileTest {
                 new User("admin-" + UUID.randomUUID(), "{noop}irrelevant", Role.ADMIN));
         studentUsername = "student-" + UUID.randomUUID() + "@uni-sofia.bg";
         studentUser = userRepository.save(new User(studentUsername, "{noop}irrelevant", Role.STUDENT));
+        otherStudentUsername = "student-" + UUID.randomUUID() + "@uni-sofia.bg";
+        otherStudentUser = userRepository.save(new User(otherStudentUsername, "{noop}irrelevant", Role.STUDENT));
     }
 
     @AfterEach
     void tearDown() {
         studentProfileRepository.findByStudent(studentUser).ifPresent(studentProfileRepository::delete);
+        studentProfileRepository.findByStudent(otherStudentUser).ifPresent(studentProfileRepository::delete);
         userRepository.delete(admin);
         userRepository.delete(studentUser);
+        userRepository.delete(otherStudentUser);
     }
 
     private String body(String enrolledSemester, String facultyNumber) {
-        return "{\"studentUsername\":\"" + studentUsername + "\","
+        return body(studentUsername, enrolledSemester, facultyNumber);
+    }
+
+    private String body(String username, String enrolledSemester, String facultyNumber) {
+        return "{\"studentUsername\":\"" + username + "\","
                 + "\"facultyNumber\":\"" + facultyNumber + "\","
                 + "\"enrolledSemester\":" + enrolledSemester + "}";
     }
@@ -108,5 +118,54 @@ class AdminStudentProfileTest {
                         .content(body("1", "1".repeat(51))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Факултетният номер е твърде дълъг"));
+    }
+
+    @Test
+    void rejectsAFacultyNumberAlreadyUsedByAnotherStudent() throws Exception {
+        mockMvc.perform(put("/api/admin/students/profile")
+                        .with(user(new AppUserPrincipal(admin)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body(studentUsername, "1", "121999")))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/admin/students/profile")
+                        .with(user(new AppUserPrincipal(admin)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body(otherStudentUsername, "1", "121999")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Този факултетен номер вече принадлежи на друг ученик"));
+    }
+
+    @Test
+    void allowsRewritingTheSameFacultyNumberForTheSameStudent() throws Exception {
+        mockMvc.perform(put("/api/admin/students/profile")
+                        .with(user(new AppUserPrincipal(admin)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body(studentUsername, "1", "121998")))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/admin/students/profile")
+                        .with(user(new AppUserPrincipal(admin)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body(studentUsername, "2", "121998")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enrolledSemester").value(2));
+    }
+
+    @Test
+    void treatsFacultyNumbersAsCaseInsensitiveDuplicatesAfterNormalization() throws Exception {
+        mockMvc.perform(put("/api/admin/students/profile")
+                        .with(user(new AppUserPrincipal(admin)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body(studentUsername, "1", "abc123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.facultyNumber").value("ABC123"));
+
+        mockMvc.perform(put("/api/admin/students/profile")
+                        .with(user(new AppUserPrincipal(admin)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body(otherStudentUsername, "1", "ABC123")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Този факултетен номер вече принадлежи на друг ученик"));
     }
 }

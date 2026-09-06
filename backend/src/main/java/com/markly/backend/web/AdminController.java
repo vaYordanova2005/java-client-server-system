@@ -5,6 +5,7 @@ import com.markly.backend.domain.StudentProfile;
 import com.markly.backend.domain.User;
 import com.markly.backend.repository.StudentProfileRepository;
 import com.markly.backend.repository.UserRepository;
+import com.markly.backend.service.StudentProfileNormalizer;
 import com.markly.backend.service.UserValidationService;
 import com.markly.backend.web.dto.CreateUserRequest;
 import com.markly.backend.web.dto.StudentProfileResponse;
@@ -120,8 +121,13 @@ public class AdminController {
         StudentProfile profile = studentProfileRepository.findByStudent(student)
                 .orElseGet(() -> new StudentProfile(student));
 
+        String facultyNumber = StudentProfileNormalizer.normalizeFacultyNumber(request.facultyNumber());
+        if (facultyNumber != null && studentProfileRepository.existsByFacultyNumberAndStudentNot(facultyNumber, student)) {
+            throw new IllegalArgumentException("Този факултетен номер вече принадлежи на друг ученик");
+        }
+
         profile.setDegreeLevel(request.degreeLevel());
-        profile.setFacultyNumber(request.facultyNumber());
+        profile.setFacultyNumber(facultyNumber);
         profile.setFaculty(request.faculty());
         profile.setSpecialty(request.specialty());
         profile.setStudyMode(request.studyMode());

@@ -3,19 +3,22 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { HomeIcon, JournalIcon, ChartIcon, CalendarIcon } from '../components/icons';
 import { NetworkField } from '../components/NetworkField';
+import type { Role } from '../types';
+
+// Дневник and Статистики render real data for STUDENT (own grades) and
+// TEACHER (own-entered grades); ADMIN still gets "в процес на разработка" on
+// those routes, so the nav doesn't offer them there.
+const ROLES_WITH_JOURNAL_AND_STATISTICS: Role[] = ['STUDENT', 'TEACHER'];
 
 export function Layout({ title, children }: { title?: string; children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const homePath = user ? `/${user.role.toLowerCase()}` : '/';
-  // Дневник and Статистики only ever show a student's own grades; for a
-  // teacher or an admin they answer "в процес на разработка", so they are not
-  // offered in the navigation of those roles.
-  const isStudent = user?.role === 'STUDENT';
+  const showJournalAndStatistics = !!user && ROLES_WITH_JOURNAL_AND_STATISTICS.includes(user.role);
   const navItems = [
     { to: homePath, label: 'Начало', icon: HomeIcon, end: true },
-    ...(isStudent
+    ...(showJournalAndStatistics
       ? [
           { to: '/journal', label: 'Дневник', icon: JournalIcon, end: false },
           { to: '/statistics', label: 'Статистики', icon: ChartIcon, end: false },

@@ -2,17 +2,25 @@ package com.markly.backend.web;
 
 import com.markly.backend.domain.Grade;
 import com.markly.backend.domain.Role;
+import com.markly.backend.domain.StudentProfile;
 import com.markly.backend.domain.User;
 import com.markly.backend.repository.GradeRepository;
+import com.markly.backend.repository.StudentProfileRepository;
 import com.markly.backend.repository.UserRepository;
 import com.markly.backend.security.AppUserPrincipal;
+import com.markly.backend.service.StudentProfileNormalizer;
 import com.markly.backend.web.dto.CreateGradeRequest;
 import com.markly.backend.web.dto.GradeResponse;
+import com.markly.backend.web.dto.StudentLookupResponse;
+import com.markly.backend.web.dto.TeacherGradeResponse;
+import com.markly.backend.web.dto.UpdateGradeRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/teacher")
@@ -20,10 +28,52 @@ public class TeacherController {
 
     private final UserRepository userRepository;
     private final GradeRepository gradeRepository;
+    private final StudentProfileRepository studentProfileRepository;
 
-    public TeacherController(UserRepository userRepository, GradeRepository gradeRepository) {
+    public TeacherController(
+            UserRepository userRepository,
+            GradeRepository gradeRepository,
+            StudentProfileRepository studentProfileRepository) {
         this.userRepository = userRepository;
         this.gradeRepository = gradeRepository;
+        this.studentProfileRepository = studentProfileRepository;
+    }
+
+    /**
+     * Accepts either a faculty number or an email so a teacher can resolve
+     * whichever one they actually have on hand — a class roster usually has
+     * faculty numbers, not emails. {@code query} is tried as a faculty number
+     * first (normalized the same way {@code AdminController} normalizes on
+     * write, so the exact-match repository query is safe); only if that
+     * fails is it treated as an email. This is a lookup convenience only —
+     * grades are still recorded against the resolved account's email
+     * ({@link #addGrade}), so the account identifier stays the email, per
+     * documentation/decisions.md.
+     */
+    @GetMapping("/students/lookup")
+    public StudentLookupResponse lookupStudent(@RequestParam String query) {
+        String normalized = StudentProfileNormalizer.normalizeFacultyNumber(query);
+        if (normalized != null) {
+            var byFacultyNumber = studentProfileRepository.findByFacultyNumber(normalized);
+            if (byFacultyNumber.isPresent()) {
+                StudentProfile profile = byFacultyNumber.get();
+                return StudentLookupResponse.from(profile, profile.getStudent().getUsername());
+            }
+        }
+
+        User student = userRepository.findByUsernameIgnoreCase(query)
+                .filter(u -> u.getRole() == Role.STUDENT)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Няма ученик с такъв факултетен номер или имейл"));
+        return studentProfileRepository.findByStudent(student)
+                .map(profile -> StudentLookupResponse.from(profile, student.getUsername()))
+                .orElseGet(() -> StudentLookupResponse.empty(student.getUsername()));
+    }
+
+    @GetMapping("/grades")
+    public List<TeacherGradeResponse> myGrades(@AuthenticationPrincipal AppUserPrincipal principal) {
+        return gradeRepository.findByTeacherOrderByCreatedAtDesc(principal.getUser()).stream()
+                .map(TeacherGradeResponse::from)
+                .toList();
     }
 
     @PostMapping("/grades")
@@ -37,5 +87,45 @@ public class TeacherController {
 
         Grade grade = new Grade(student, principal.getUser(), request.subject(), request.semester(), request.grade());
         return GradeResponse.from(gradeRepository.save(grade));
+    }
+
+    @PutMapping("/grades/{id}")
+    public TeacherGradeResponse updateGrade(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateGradeRequest request,
+            @AuthenticationPrincipal AppUserPrincipal principal) {
+        Grade grade = findOwnGrade(id, principal);
+        grade.setSubject(request.subject());
+        grade.setSemester(request.semester());
+        grade.setGrade(request.grade());
+        gradeRepository.save(grade);
+        // Built from `grade`, not save()'s return value: `findOwnGrade` runs
+        // in its own transaction (open-in-view is disabled and this
+        // controller isn't @Transactional), so by the time save() returns,
+        // its own transaction has also closed. JpaRepository.save() on a
+        // detached entity with an id merges it into a *new* managed
+        // instance, and without cascade=MERGE on Grade#student that copy's
+        // student association is a fresh, uninitialized proxy — reading it
+        // here would throw LazyInitializationException. `grade` itself is
+        // the object findOwnGrade returned, whose student was already
+        // fetched eagerly, so it's safe to read after any transaction ends.
+        return TeacherGradeResponse.from(grade);
+    }
+
+    @DeleteMapping("/grades/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteGrade(@PathVariable Long id, @AuthenticationPrincipal AppUserPrincipal principal) {
+        Grade grade = findOwnGrade(id, principal);
+        gradeRepository.delete(grade);
+    }
+
+    /**
+     * 404, not 403, when the id belongs to another teacher — otherwise the
+     * response itself would confirm the id exists under someone else's
+     * account.
+     */
+    private Grade findOwnGrade(Long id, AppUserPrincipal principal) {
+        return gradeRepository.findByIdAndTeacher(id, principal.getUser())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Няма оценка с този идентификатор"));
     }
 }

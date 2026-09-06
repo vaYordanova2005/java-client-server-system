@@ -22,6 +22,44 @@ in `legacy/` (the old TCP socket version, unmaintained, do not touch).
 Password for both roles: **at least 5 characters**, no format restrictions (not EGN, not
 digits-only).
 
+## Faculty number is a lookup convenience, not an identifier
+
+The "Username scheme" rule above still holds — a grade's `student`/`teacher` foreign keys,
+login, and every account-identity check are by email, never by faculty number. What changed
+is that a teacher can now *resolve* a faculty number to a student before grading them
+(`GET /api/teacher/students/lookup`, `TeacherController`), because a class roster usually
+has faculty numbers on it, not emails. The resolved account is still looked up and stored by
+email; faculty number never enters `Grade` or any auth path.
+
+This required two things that didn't exist before:
+
+* **`student_profiles.faculty_number` is now unique** — a *plain* unique index on the raw
+  column (`V8__add_student_profile_faculty_number_unique_index.sql`), not a partial or
+  expression index: tests run Flyway against H2 in `MODE=PostgreSQL`
+  (`backend/src/test/resources/application.yml`), and H2 doesn't support partial/expression
+  indexes even there, so every migration in this project sticks to plain `CREATE
+  INDEX`/`UNIQUE`. Case-insensitivity and "blank means unset" both come from **write-time
+  normalization** instead (`StudentProfileNormalizer`: blank/null → `null`, otherwise
+  `trim().toUpperCase()`), applied by every writer (`AdminController`, `DemoDataSeeder`, and
+  the lookup input in `TeacherController`) and, once, to every pre-existing row as part of
+  V8 itself. The index alone is not case-insensitive — don't describe it as a "partial" or
+  "case-insensitive" index anywhere; the guarantee only holds because of both pieces
+  together.
+* **The lookup endpoint is a new, deliberate disclosure of student registrar data** — any
+  authenticated teacher can resolve a faculty number to a student's faculty, specialty,
+  group, and enrolled semester, not just an admin or the student themselves. This is
+  intentionally narrower than the full `StudentProfile` (no `admissionType`, `status`,
+  `degreeLevel`, `studyMode`, `specialization`, `stream`): enough to confirm identity before
+  grading, not the whole record.
+
+A teacher can also edit or delete a grade they entered themselves
+(`PUT`/`DELETE /api/teacher/grades/{id}`), scoped by ownership
+(`GradeRepository.findByIdAndTeacher`) — a correction that's always available in
+Школо-style systems and was simply missing before. A mismatched id/teacher pair answers 404,
+not 403, so the response never confirms that an id exists under another teacher's account.
+This does not extend to reassigning a grade to a different student — `UpdateGradeRequest`
+has no `studentUsername` field; that's a delete-and-recreate, not an edit.
+
 ## Grading scale
 
 Grades are **2–6** (Bulgarian school scale), enforced with `@Min`/`@Max` wherever a grade

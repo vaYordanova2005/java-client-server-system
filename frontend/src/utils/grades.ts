@@ -50,8 +50,13 @@ export interface SemesterAverage {
   count: number;
 }
 
-/** Best first — every caller so far ranks subjects by success. */
-export function subjectAverages(grades: GradeSummary[]): SubjectAverage[] {
+/**
+ * Best first — every caller so far ranks subjects by success. Generic over
+ * `{ subject, grade }` (not just {@link GradeSummary}) so a teacher's
+ * `TeacherGradeSummary[]` — which spans many students but shares the same
+ * subject/grade fields — can reuse this without a parallel copy.
+ */
+export function subjectAverages<T extends { subject: string; grade: number }>(grades: T[]): SubjectAverage[] {
   return [...groupBy(grades, (g) => g.subject).entries()]
     .map(([subject, entries]) => ({
       subject,
@@ -61,8 +66,11 @@ export function subjectAverages(grades: GradeSummary[]): SubjectAverage[] {
     .sort((a, b) => b.avg - a.avg);
 }
 
-/** Chronological — these feed trend lines, which have to read left to right. */
-export function semesterAverages(grades: GradeSummary[]): SemesterAverage[] {
+/**
+ * Chronological — these feed trend lines, which have to read left to right.
+ * Generic for the same reason as {@link subjectAverages}.
+ */
+export function semesterAverages<T extends { semester: number; grade: number }>(grades: T[]): SemesterAverage[] {
   return [...groupBy(grades, (g) => g.semester).entries()]
     .map(([semester, entries]) => ({
       semester,
@@ -90,13 +98,25 @@ export function byCreatedAt(a: Recorded, b: Recorded): number {
 
 export type SessionType = 'regular' | 'retake';
 
-// No real "session type" field in the data yet: only one grade per
-// semester+subject can be the regular session — whichever was recorded
-// first — and every later grade for that same semester+subject is a retake
-// ("поправителна сесия"), regardless of its value.
-export function classifySessionTypes(grades: GradeSummary[]): Map<number, SessionType> {
+/**
+ * No real "session type" field in the data yet: only one grade per
+ * semester+subject can be the regular session — whichever was recorded
+ * first — and every later grade for that same semester+subject is a retake
+ * ("поправителна сесия"), regardless of its value.
+ *
+ * `keyFn` defaults to `semester::subject`, correct for a single student's
+ * own grades (the only case every existing caller uses). A grade list that
+ * mixes several students — e.g. a teacher's own-entered grades — must pass a
+ * `keyFn` that also includes the student (`studentUsername::semester::subject`),
+ * or grades from different students in the same semester+subject would be
+ * grouped together and mislabeled.
+ */
+export function classifySessionTypes<T extends Recorded & { semester: number; subject: string }>(
+  grades: T[],
+  keyFn: (g: T) => string = (g) => `${g.semester}::${g.subject}`
+): Map<number, SessionType> {
   const result = new Map<number, SessionType>();
-  for (const bucket of groupBy(grades, (g) => `${g.semester}::${g.subject}`).values()) {
+  for (const bucket of groupBy(grades, keyFn).values()) {
     [...bucket]
       .sort(byCreatedAt)
       .forEach((g, index) => result.set(g.id, index === 0 ? 'regular' : 'retake'));

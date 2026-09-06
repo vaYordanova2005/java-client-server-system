@@ -10,6 +10,7 @@ import com.markly.backend.repository.CalendarEventRepository;
 import com.markly.backend.repository.GradeRepository;
 import com.markly.backend.repository.StudentProfileRepository;
 import com.markly.backend.repository.UserRepository;
+import com.markly.backend.service.StudentProfileNormalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -238,11 +239,19 @@ public class DemoDataSeeder implements CommandLineRunner {
      * Fictional registrar-style info (faculty number, group, semester
      * status, etc.) so the profile page isn't empty on a fresh demo
      * database. Values are generated, not copied from any real record.
+     *
+     * <p>{@code index} (1..{@link #STUDENT_COUNT}) makes the faculty number
+     * unique and deterministic across the whole seed, which is what lets
+     * {@code student_profiles.faculty_number}'s unique index (see V8) accept
+     * it without collisions; run through {@link StudentProfileNormalizer}
+     * anyway so this stays byte-for-byte what every other writer of the
+     * column would produce, even though a digits-only value is already a
+     * no-op under trim/uppercase.
      */
     private StudentProfile seedStudentProfile(User student, int index, int enrolledSemester) {
         StudentProfile profile = new StudentProfile(student);
         profile.setDegreeLevel("Бакалавър");
-        profile.setFacultyNumber(String.format("12%04d", 1000 + index));
+        profile.setFacultyNumber(StudentProfileNormalizer.normalizeFacultyNumber(String.format("12%04d", 1000 + index)));
         profile.setFaculty(FACULTIES.get(0));
         profile.setSpecialty(SPECIALTIES.get(0));
         profile.setStudyMode("редовно");

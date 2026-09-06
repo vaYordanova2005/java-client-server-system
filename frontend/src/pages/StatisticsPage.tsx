@@ -2,6 +2,7 @@ import { useMemo, type CSSProperties } from 'react';
 import { Layout } from '../routes/Layout';
 import { useAuth } from '../auth/useAuth';
 import { useStudentGrades } from '../hooks/useStudentGrades';
+import { useTeacherGrades } from '../hooks/useTeacherGrades';
 import { ChartIcon, JournalIcon, TrophyIcon, BooksIcon } from '../components/icons';
 import {
   average,
@@ -12,6 +13,7 @@ import {
   subjectAverages,
   tierColor,
 } from '../utils/grades';
+import type { TeacherGradeSummary } from '../types';
 
 const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
 const GRADE_VALUES = [2, 3, 4, 5, 6];
@@ -39,7 +41,21 @@ function chartY(avg: number): number {
 
 export function StatisticsPage() {
   const { user } = useAuth();
-  const { grades, error, loading } = useStudentGrades(user?.role === 'STUDENT');
+
+  if (user?.role === 'STUDENT') return <StudentStatistics />;
+  if (user?.role === 'TEACHER') return <TeacherStatistics />;
+
+  return (
+    <Layout title="Статистики">
+      <section className="card">
+        <p>Тази секция е в процес на разработка.</p>
+      </section>
+    </Layout>
+  );
+}
+
+function StudentStatistics() {
+  const { grades, error, loading } = useStudentGrades();
 
   const stats = useMemo(() => {
     if (grades.length === 0) return null;
@@ -103,16 +119,6 @@ export function StatisticsPage() {
       regularAvg: regular.length ? average(regular.map((g) => g.grade)) : null,
     };
   }, [grades]);
-
-  if (user?.role !== 'STUDENT') {
-    return (
-      <Layout title="Статистики">
-        <section className="card">
-          <p>Тази секция е в процес на разработка.</p>
-        </section>
-      </Layout>
-    );
-  }
 
   return (
     <Layout title="Статистики">
@@ -272,6 +278,169 @@ export function StatisticsPage() {
               </table>
             </div>
           </section>
+
+          {stats.retakeCount > 0 && (
+            <section className="card">
+              <h2>Редовна срещу поправителна сесия</h2>
+              <div className="retake-split">
+                <div className="retake-tile">
+                  <strong>{stats.regularAvg?.toFixed(2) ?? '—'}</strong>
+                  <span>Редовна сесия</span>
+                </div>
+                <div className="retake-tile">
+                  <strong>{stats.retakeAvg?.toFixed(2) ?? '—'}</strong>
+                  <span>Поправителна сесия ({stats.retakeCount})</span>
+                </div>
+              </div>
+            </section>
+          )}
+        </>
+      )}
+    </Layout>
+  );
+}
+
+function teacherSessionKey(g: TeacherGradeSummary): string {
+  return `${g.studentUsername}::${g.semester}::${g.subject}`;
+}
+
+function TeacherStatistics() {
+  const { grades, error, loading } = useTeacherGrades();
+
+  const stats = useMemo(() => {
+    if (grades.length === 0) return null;
+
+    const overallAvg = average(grades.map((g) => g.grade));
+    const distribution = GRADE_VALUES.map((value) => {
+      const count = grades.filter((g) => g.grade === value).length;
+      return { value, count, pct: (count / grades.length) * 100 };
+    });
+    const studentCount = new Set(grades.map((g) => g.studentUsername)).size;
+    const bySubject = subjectAverages(grades);
+    const bySemesterAvg = semesterAverages(grades);
+
+    // Must include the student in the key here — unlike the student's own
+    // statistics page, this list spans many students, and the default
+    // semester::subject key would otherwise treat two different students'
+    // first grade in the same semester+subject as one "regular" and one
+    // "retake" of each other.
+    const sessionTypes = classifySessionTypes(grades, teacherSessionKey);
+    const retakes = grades.filter((g) => sessionTypes.get(g.id) === 'retake');
+    const regular = grades.filter((g) => sessionTypes.get(g.id) !== 'retake');
+
+    return {
+      overallAvg,
+      total: grades.length,
+      distribution,
+      studentCount,
+      subjectAverages: bySubject,
+      semesterAverages: bySemesterAvg,
+      retakeCount: retakes.length,
+      retakeAvg: retakes.length ? average(retakes.map((g) => g.grade)) : null,
+      regularAvg: regular.length ? average(regular.map((g) => g.grade)) : null,
+    };
+  }, [grades]);
+
+  return (
+    <Layout title="Статистики">
+      {loading && (
+        <section className="card">
+          <p>Зареждане...</p>
+        </section>
+      )}
+      {error && (
+        <section className="card">
+          <p className="error">{error}</p>
+        </section>
+      )}
+      {!loading && !error && grades.length === 0 && (
+        <section className="card">
+          <p>Все още няма въведени оценки.</p>
+        </section>
+      )}
+
+      {!loading && stats && (
+        <>
+          <div className="stat-strip">
+            <div className="stat-tile" style={{ '--tile-accent': tierColor(stats.overallAvg) } as CSSProperties}>
+              <ChartIcon />
+              <div>
+                <strong>{stats.overallAvg.toFixed(2)}</strong>
+                <span>Среден успех</span>
+              </div>
+            </div>
+            <div className="stat-tile">
+              <JournalIcon />
+              <div>
+                <strong>{stats.total}</strong>
+                <span>Оценки</span>
+              </div>
+            </div>
+            <div className="stat-tile" style={{ '--tile-accent': 'var(--success)' } as CSSProperties}>
+              <TrophyIcon />
+              <div>
+                <strong>{stats.studentCount}</strong>
+                <span>Ученици</span>
+              </div>
+            </div>
+            <div className="stat-tile">
+              <BooksIcon />
+              <div>
+                <strong>{stats.retakeCount}</strong>
+                <span>Поправителни</span>
+              </div>
+            </div>
+          </div>
+
+          <section className="card">
+            <h2>Разпределение на оценките</h2>
+            <div className="subject-bars">
+              {stats.distribution.map(({ value, count, pct }) => (
+                <div className="subject-bar-row" key={value}>
+                  <span className="subject-bar-label">Оценка {value}</span>
+                  <div className="bar-track">
+                    <div className="bar-fill" style={{ width: `${pct}%`, background: gradeColor(value) }} />
+                  </div>
+                  <span className="subject-bar-value">
+                    {count} <small>({pct.toFixed(0)}%)</small>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="card">
+            <h2>По предмети</h2>
+            <div className="subject-bars">
+              {stats.subjectAverages.map(({ subject, avg, count }) => (
+                <div className="subject-bar-row" key={subject}>
+                  <span className="subject-bar-label">{subject}</span>
+                  <div className="bar-track">
+                    <div className="bar-fill" style={{ width: `${(avg / GRADE_VALUES[GRADE_VALUES.length - 1]) * 100}%`, background: tierColor(avg) }} />
+                  </div>
+                  <span className="subject-bar-value">
+                    {avg.toFixed(2)} <small>({count})</small>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {stats.semesterAverages.length > 1 && (
+            <section className="card">
+              <h2>Развитие по семестри</h2>
+              <div className="semester-trend">
+                {stats.semesterAverages.map(({ semester, avg }) => (
+                  <div className="semester-pill" key={semester}>
+                    <span className="semester-pill-label">Сем. {semester}</span>
+                    <span className="semester-pill-value" style={{ color: tierColor(avg) }}>
+                      {avg.toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {stats.retakeCount > 0 && (
             <section className="card">
