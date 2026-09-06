@@ -4,16 +4,7 @@ import { useAuth } from '../auth/useAuth';
 import { useStudentGrades } from '../hooks/useStudentGrades';
 import { useTeacherGrades } from '../hooks/useTeacherGrades';
 import { ChartIcon, JournalIcon, TrophyIcon, BooksIcon } from '../components/icons';
-import {
-  average,
-  classifySessionTypes,
-  gradeColor,
-  groupBy,
-  semesterAverages,
-  subjectAverages,
-  tierColor,
-} from '../utils/grades';
-import type { TeacherGradeSummary } from '../types';
+import { average, gradeColor, groupBy, semesterAverages, subjectAverages, tierColor } from '../utils/grades';
 
 const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
 const GRADE_VALUES = [2, 3, 4, 5, 6];
@@ -88,9 +79,8 @@ function StudentStatistics() {
       return { subject, bySem, trend };
     });
 
-    const sessionTypes = classifySessionTypes(grades);
-    const retakes = grades.filter((g) => sessionTypes.get(g.id) === 'retake');
-    const regular = grades.filter((g) => sessionTypes.get(g.id) !== 'retake');
+    const retakes = grades.filter((g) => g.gradeType === 'RETAKE');
+    const regular = grades.filter((g) => g.gradeType !== 'RETAKE');
 
     // Same fixed-list-plus-overflow approach as the journal: keeps the usual
     // 1..8 axis stable while still giving an out-of-range semester its own
@@ -121,7 +111,7 @@ function StudentStatistics() {
   }, [grades]);
 
   return (
-    <Layout title="Статистики">
+    <Layout>
       {loading && (
         <section className="card">
           <p>Зареждане...</p>
@@ -300,10 +290,6 @@ function StudentStatistics() {
   );
 }
 
-function teacherSessionKey(g: TeacherGradeSummary): string {
-  return `${g.studentUsername}::${g.semester}::${g.subject}`;
-}
-
 function TeacherStatistics() {
   const { grades, error, loading } = useTeacherGrades();
 
@@ -319,14 +305,8 @@ function TeacherStatistics() {
     const bySubject = subjectAverages(grades);
     const bySemesterAvg = semesterAverages(grades);
 
-    // Must include the student in the key here — unlike the student's own
-    // statistics page, this list spans many students, and the default
-    // semester::subject key would otherwise treat two different students'
-    // first grade in the same semester+subject as one "regular" and one
-    // "retake" of each other.
-    const sessionTypes = classifySessionTypes(grades, teacherSessionKey);
-    const retakes = grades.filter((g) => sessionTypes.get(g.id) === 'retake');
-    const regular = grades.filter((g) => sessionTypes.get(g.id) !== 'retake');
+    const retakes = grades.filter((g) => g.gradeType === 'RETAKE');
+    const regular = grades.filter((g) => g.gradeType !== 'RETAKE');
 
     return {
       overallAvg,
@@ -342,7 +322,7 @@ function TeacherStatistics() {
   }, [grades]);
 
   return (
-    <Layout title="Статистики">
+    <Layout>
       {loading && (
         <section className="card">
           <p>Зареждане...</p>
@@ -380,7 +360,7 @@ function TeacherStatistics() {
               <TrophyIcon />
               <div>
                 <strong>{stats.studentCount}</strong>
-                <span>Ученици</span>
+                <span>Студенти</span>
               </div>
             </div>
             <div className="stat-tile">

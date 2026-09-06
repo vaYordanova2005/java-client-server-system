@@ -100,7 +100,8 @@ public class TeacherController {
                 .filter(u -> u.getRole() == Role.STUDENT)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Невалиден имейл на ученик"));
 
-        Grade grade = new Grade(student, principal.getUser(), request.subject(), request.semester(), request.grade());
+        Grade grade = new Grade(
+                student, principal.getUser(), request.subject(), request.semester(), request.grade(), request.gradeType());
         return GradeResponse.from(gradeRepository.save(grade));
     }
 
@@ -113,6 +114,7 @@ public class TeacherController {
         grade.setSubject(request.subject());
         grade.setSemester(request.semester());
         grade.setGrade(request.grade());
+        grade.setGradeType(request.gradeType());
         gradeRepository.save(grade);
         // Built from `grade`, not save()'s return value: `findOwnGrade` runs
         // in its own transaction (open-in-view is disabled and this

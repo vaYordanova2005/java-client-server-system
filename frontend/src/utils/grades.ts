@@ -1,4 +1,4 @@
-import type { GradeSummary } from '../types';
+import type { GradeSummary, GradeType } from '../types';
 
 export const TOP_GRADE = 6;
 export const FAIL_GRADE = 2;
@@ -109,30 +109,12 @@ export function byCreatedAt(a: Recorded, b: Recorded): number {
   return diff !== 0 ? diff : a.id - b.id;
 }
 
-export type SessionType = 'regular' | 'retake';
+export const GRADE_TYPES: GradeType[] = ['TEST', 'ORAL_EXAM', 'CLASS_TEST', 'REGULAR', 'RETAKE'];
 
-/**
- * No real "session type" field in the data yet: only one grade per
- * semester+subject can be the regular session — whichever was recorded
- * first — and every later grade for that same semester+subject is a retake
- * ("поправителна сесия"), regardless of its value.
- *
- * `keyFn` defaults to `semester::subject`, correct for a single student's
- * own grades (the only case every existing caller uses). A grade list that
- * mixes several students — e.g. a teacher's own-entered grades — must pass a
- * `keyFn` that also includes the student (`studentUsername::semester::subject`),
- * or grades from different students in the same semester+subject would be
- * grouped together and mislabeled.
- */
-export function classifySessionTypes<T extends Recorded & { semester: number; subject: string }>(
-  grades: T[],
-  keyFn: (g: T) => string = (g) => `${g.semester}::${g.subject}`
-): Map<number, SessionType> {
-  const result = new Map<number, SessionType>();
-  for (const bucket of groupBy(grades, keyFn).values()) {
-    [...bucket]
-      .sort(byCreatedAt)
-      .forEach((g, index) => result.set(g.id, index === 0 ? 'regular' : 'retake'));
-  }
-  return result;
-}
+export const GRADE_TYPE_LABELS: Record<GradeType, string> = {
+  TEST: 'Тест',
+  ORAL_EXAM: 'Устно изпитване',
+  CLASS_TEST: 'Контролна работа',
+  REGULAR: 'Редовна сесия',
+  RETAKE: 'Поправителна сесия',
+};

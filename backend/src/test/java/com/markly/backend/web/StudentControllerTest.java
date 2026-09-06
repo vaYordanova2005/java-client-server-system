@@ -1,6 +1,7 @@
 package com.markly.backend.web;
 
 import com.markly.backend.domain.Grade;
+import com.markly.backend.domain.GradeType;
 import com.markly.backend.domain.Role;
 import com.markly.backend.domain.User;
 import com.markly.backend.repository.GradeRepository;
@@ -70,9 +71,9 @@ class StudentControllerTest {
         student = save("student", Role.STUDENT);
         otherStudent = save("other", Role.STUDENT);
 
-        saveGrade(new Grade(student, teacher, "Програмиране", 1, 6));
-        saveGrade(new Grade(student, teacher, "Бази от данни", 2, 4));
-        saveGrade(new Grade(otherStudent, teacher, "Обща физика", 1, 2));
+        saveGrade(new Grade(student, teacher, "Програмиране", 1, 6, GradeType.REGULAR));
+        saveGrade(new Grade(student, teacher, "Бази от данни", 2, 4, GradeType.REGULAR));
+        saveGrade(new Grade(otherStudent, teacher, "Обща физика", 1, 2, GradeType.REGULAR));
     }
 
     @AfterEach

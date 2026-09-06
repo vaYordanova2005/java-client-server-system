@@ -43,15 +43,20 @@ public class Grade {
     @Column(nullable = false)
     private int grade;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "grade_type", nullable = false, length = 20)
+    private GradeType gradeType;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
-    public Grade(User student, User teacher, String subject, int semester, int grade) {
+    public Grade(User student, User teacher, String subject, int semester, int grade, GradeType gradeType) {
         this.student = student;
         this.teacher = teacher;
         this.subject = subject;
         this.semester = semester;
         this.grade = grade;
+        this.gradeType = gradeType;
     }
 
     @PrePersist

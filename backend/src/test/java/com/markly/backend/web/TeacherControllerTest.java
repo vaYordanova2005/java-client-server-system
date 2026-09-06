@@ -1,6 +1,7 @@
 package com.markly.backend.web;
 
 import com.markly.backend.domain.Grade;
+import com.markly.backend.domain.GradeType;
 import com.markly.backend.domain.Role;
 import com.markly.backend.domain.StudentProfile;
 import com.markly.backend.domain.User;
@@ -99,7 +100,7 @@ class TeacherControllerTest {
     }
 
     private Grade saveGrade(User forTeacher, String subject, int semester, int grade) {
-        Grade entity = gradeRepository.save(new Grade(student, forTeacher, subject, semester, grade));
+        Grade entity = gradeRepository.save(new Grade(student, forTeacher, subject, semester, grade, GradeType.REGULAR));
         createdGradeIds.add(entity.getId());
         return entity;
     }
@@ -177,7 +178,7 @@ class TeacherControllerTest {
         mockMvc.perform(put("/api/teacher/grades/" + grade.getId())
                         .with(user(new AppUserPrincipal(teacher)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"subject\":\"Програмиране\",\"semester\":1,\"grade\":6}"))
+                        .content("{\"subject\":\"Програмиране\",\"semester\":1,\"grade\":6,\"gradeType\":\"REGULAR\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.grade").value(6))
                 .andExpect(jsonPath("$.studentUsername").value(studentUsername));
@@ -190,7 +191,7 @@ class TeacherControllerTest {
         mockMvc.perform(put("/api/teacher/grades/" + grade.getId())
                         .with(user(new AppUserPrincipal(teacher)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"subject\":\"Програмиране\",\"semester\":1,\"grade\":6}"))
+                        .content("{\"subject\":\"Програмиране\",\"semester\":1,\"grade\":6,\"gradeType\":\"REGULAR\"}"))
                 .andExpect(status().isNotFound());
     }
 
@@ -201,7 +202,7 @@ class TeacherControllerTest {
         mockMvc.perform(put("/api/teacher/grades/" + grade.getId())
                         .with(user(new AppUserPrincipal(teacher)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"subject\":\"Програмиране\",\"semester\":1,\"grade\":9}"))
+                        .content("{\"subject\":\"Програмиране\",\"semester\":1,\"grade\":9,\"gradeType\":\"REGULAR\"}"))
                 .andExpect(status().isBadRequest());
     }
 

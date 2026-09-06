@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
-import { HomeIcon, JournalIcon, ChartIcon, CalendarIcon } from '../components/icons';
+import { HomeIcon, JournalIcon, ChartIcon, CalendarIcon, StudentsIcon } from '../components/icons';
 import { NetworkField } from '../components/NetworkField';
 import type { Role } from '../types';
 
@@ -16,14 +16,12 @@ export function Layout({ title, children }: { title?: string; children: ReactNod
 
   const homePath = user ? `/${user.role.toLowerCase()}` : '/';
   const showJournalAndStatistics = !!user && ROLES_WITH_JOURNAL_AND_STATISTICS.includes(user.role);
+  const showStudents = user?.role === 'TEACHER';
   const navItems = [
     { to: homePath, label: 'Начало', icon: HomeIcon, end: true },
-    ...(showJournalAndStatistics
-      ? [
-          { to: '/journal', label: 'Дневник', icon: JournalIcon, end: false },
-          { to: '/statistics', label: 'Статистики', icon: ChartIcon, end: false },
-        ]
-      : []),
+    ...(showJournalAndStatistics ? [{ to: '/journal', label: 'Дневник', icon: JournalIcon, end: false }] : []),
+    ...(showStudents ? [{ to: '/students', label: 'Студенти', icon: StudentsIcon, end: false }] : []),
+    ...(showJournalAndStatistics ? [{ to: '/statistics', label: 'Статистики', icon: ChartIcon, end: false }] : []),
     { to: '/calendar', label: 'Календар', icon: CalendarIcon, end: false },
   ];
 

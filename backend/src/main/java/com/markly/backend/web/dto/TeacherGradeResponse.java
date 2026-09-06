@@ -1,6 +1,7 @@
 package com.markly.backend.web.dto;
 
 import com.markly.backend.domain.Grade;
+import com.markly.backend.domain.GradeType;
 import com.markly.backend.domain.StudentProfile;
 
 import java.time.Instant;
@@ -26,6 +27,7 @@ public record TeacherGradeResponse(
         String subject,
         int semester,
         int grade,
+        GradeType gradeType,
         Instant createdAt,
         String studentUsername,
         String facultyNumber,
@@ -37,6 +39,7 @@ public record TeacherGradeResponse(
                 grade.getSubject(),
                 grade.getSemester(),
                 grade.getGrade(),
+                grade.getGradeType(),
                 grade.getCreatedAt(),
                 grade.getStudent().getUsername(),
                 profile == null ? null : profile.getFacultyNumber(),

@@ -3,6 +3,7 @@ package com.markly.backend.config;
 import com.markly.backend.domain.CalendarEvent;
 import com.markly.backend.domain.CalendarEventType;
 import com.markly.backend.domain.Grade;
+import com.markly.backend.domain.GradeType;
 import com.markly.backend.domain.Role;
 import com.markly.backend.domain.StudentProfile;
 import com.markly.backend.domain.User;
@@ -146,7 +147,8 @@ public class DemoDataSeeder implements CommandLineRunner {
                     User teacher = teachers.get(subjectIndex % teachers.size());
 
                     int grade = weightedGrade(random);
-                    saveGrade(student, teacher, subject, enrolledSemester, semester, grade, REGULAR_LEAD_DAYS_BASE - k);
+                    saveGrade(student, teacher, subject, enrolledSemester, semester, grade,
+                            REGULAR_LEAD_DAYS_BASE - k, GradeType.REGULAR);
                     gradeCount++;
 
                     // A failing grade is always retaken; a few passing ones are
@@ -154,7 +156,7 @@ public class DemoDataSeeder implements CommandLineRunner {
                     // something to compare.
                     if (grade == FAIL_GRADE || random.nextInt(100) < EXTRA_RETAKE_PERCENT) {
                         saveGrade(student, teacher, subject, enrolledSemester, semester,
-                                retakeGrade(random), RETAKE_LEAD_DAYS);
+                                retakeGrade(random), RETAKE_LEAD_DAYS, GradeType.RETAKE);
                         gradeCount++;
                     }
                 }
@@ -184,8 +186,8 @@ public class DemoDataSeeder implements CommandLineRunner {
      */
     private void saveGrade(
             User student, User teacher, String subject,
-            int enrolledSemester, int semester, int grade, int daysBeforeSessionEnd) {
-        Grade entity = new Grade(student, teacher, subject, semester, grade);
+            int enrolledSemester, int semester, int grade, int daysBeforeSessionEnd, GradeType gradeType) {
+        Grade entity = new Grade(student, teacher, subject, semester, grade, gradeType);
         entity.setCreatedAt(sessionInstant(enrolledSemester, semester, daysBeforeSessionEnd));
         gradeRepository.save(entity);
     }

@@ -209,6 +209,13 @@ details.card p {
   opacity: 0.75;
 }
 
+/* A form nested inside an inner <details> (e.g. the per-student "add grade"
+   form) sits directly under it with no ancestor padding of its own, unlike
+   .card's own padding or a table cell's — without this it runs edge-to-edge. */
+details.card details form {
+  margin: 0 1.5rem 1.5rem;
+}
+
 .grade-btn {
   padding: 0.25rem 0.65rem;
   border-radius: 999px;

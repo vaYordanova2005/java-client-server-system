@@ -13,11 +13,14 @@ export interface UserSummary {
   locked: boolean;
 }
 
+export type GradeType = 'TEST' | 'ORAL_EXAM' | 'CLASS_TEST' | 'REGULAR' | 'RETAKE';
+
 export interface GradeSummary {
   id: number;
   subject: string;
   semester: number;
   grade: number;
+  gradeType: GradeType;
   createdAt: string;
   teacherUsername: string | null;
 }
@@ -34,6 +37,7 @@ export interface TeacherGradeSummary {
   subject: string;
   semester: number;
   grade: number;
+  gradeType: GradeType;
   createdAt: string;
   studentUsername: string;
   facultyNumber: string | null;
