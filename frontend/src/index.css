@@ -172,6 +172,19 @@ main {
   margin-top: 0;
 }
 
+.card-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.card-link {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  color: var(--primary);
+}
+
 details.card {
   padding: 0;
   overflow: hidden;
