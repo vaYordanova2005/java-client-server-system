@@ -38,6 +38,19 @@ export function groupBy<T, K>(items: T[], key: (item: T) => K): Map<K, T[]> {
   return groups;
 }
 
+/**
+ * `localeCompare` alone orders `student10` before `student2`, since it
+ * compares the digits character by character. The numeric collator compares
+ * runs of digits as numbers, so `student2 < student10` — the order a teacher
+ * scanning a roster expects. Also used for group numbers, which are short
+ * numeric strings for the same reason.
+ */
+const collator = new Intl.Collator('bg', { numeric: true, sensitivity: 'base' });
+
+export function naturalCompare(a: string, b: string): number {
+  return collator.compare(a, b);
+}
+
 export interface SubjectAverage {
   subject: string;
   avg: number;

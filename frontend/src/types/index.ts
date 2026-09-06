@@ -36,6 +36,9 @@ export interface TeacherGradeSummary {
   grade: number;
   createdAt: string;
   studentUsername: string;
+  facultyNumber: string | null;
+  specialty: string | null;
+  groupNumber: string | null;
 }
 
 export type CalendarEventType = 'TEST' | 'HOLIDAY' | 'EVENT';

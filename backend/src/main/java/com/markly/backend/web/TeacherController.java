@@ -21,6 +21,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/teacher")
@@ -69,10 +72,22 @@ public class TeacherController {
                 .orElseGet(() -> StudentLookupResponse.empty(student.getUsername()));
     }
 
+    /**
+     * Each grade carries the student's faculty number, specialty and group so
+     * the journal can group and search by them. The profiles are fetched in a
+     * single batch query keyed by student — one profile lookup per grade would
+     * be an N+1 over a list that repeats the same students many times.
+     */
     @GetMapping("/grades")
     public List<TeacherGradeResponse> myGrades(@AuthenticationPrincipal AppUserPrincipal principal) {
-        return gradeRepository.findByTeacherOrderByCreatedAtDesc(principal.getUser()).stream()
-                .map(TeacherGradeResponse::from)
+        List<Grade> grades = gradeRepository.findByTeacherOrderByCreatedAtDesc(principal.getUser());
+        Set<User> students = grades.stream().map(Grade::getStudent).collect(Collectors.toSet());
+        Map<Long, StudentProfile> profilesByStudentId = students.isEmpty()
+                ? Map.of()
+                : studentProfileRepository.findByStudentIn(students).stream()
+                        .collect(Collectors.toMap(p -> p.getStudent().getId(), p -> p));
+        return grades.stream()
+                .map(g -> TeacherGradeResponse.from(g, profilesByStudentId.get(g.getStudent().getId())))
                 .toList();
     }
 
@@ -109,7 +124,8 @@ public class TeacherController {
         // here would throw LazyInitializationException. `grade` itself is
         // the object findOwnGrade returned, whose student was already
         // fetched eagerly, so it's safe to read after any transaction ends.
-        return TeacherGradeResponse.from(grade);
+        return TeacherGradeResponse.from(
+                grade, studentProfileRepository.findByStudent(grade.getStudent()).orElse(null));
     }
 
     @DeleteMapping("/grades/{id}")

@@ -25,16 +25,19 @@ export function TeacherDashboard() {
 
   const [query, setQuery] = useState('');
   const [subject, setSubject] = useState('');
-  const [semester, setSemester] = useState(1);
-  const [gradeValue, setGradeValue] = useState(6);
+  // '' while the field is empty mid-edit — coercing straight to 0 on every
+  // keystroke (via `Number('')`) meant clearing the field to type a new
+  // value showed a flashing "0" instead of staying blank.
+  const [semester, setSemester] = useState<number | ''>(1);
+  const [gradeValue, setGradeValue] = useState<number | ''>(6);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editSubject, setEditSubject] = useState('');
-  const [editSemester, setEditSemester] = useState(1);
-  const [editGrade, setEditGrade] = useState(6);
+  const [editSemester, setEditSemester] = useState<number | ''>(1);
+  const [editGrade, setEditGrade] = useState<number | ''>(6);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -71,6 +74,10 @@ export function TeacherDashboard() {
     if (!student) return;
     setSubmitError(null);
     setSubmitSuccess(null);
+    if (semester === '' || gradeValue === '') {
+      setSubmitError('Моля, въведете семестър и оценка.');
+      return;
+    }
     setSubmitting(true);
     try {
       await apiClient.post('/teacher/grades', {
@@ -107,8 +114,12 @@ export function TeacherDashboard() {
   const handleSaveEdit = async (event: FormEvent) => {
     event.preventDefault();
     if (editingId === null) return;
-    setEditSubmitting(true);
     setEditError(null);
+    if (editSemester === '' || editGrade === '') {
+      setEditError('Моля, въведете семестър и оценка.');
+      return;
+    }
+    setEditSubmitting(true);
     try {
       await apiClient.put(`/teacher/grades/${editingId}`, {
         subject: editSubject,
@@ -138,7 +149,7 @@ export function TeacherDashboard() {
   };
 
   return (
-    <Layout title="Учител">
+    <Layout>
       <div className="stat-strip">
         <div
           className="stat-tile"
@@ -226,7 +237,7 @@ export function TeacherDashboard() {
                   min={1}
                   max={8}
                   value={semester}
-                  onChange={(e) => setSemester(Number(e.target.value))}
+                  onChange={(e) => setSemester(e.target.value === '' ? '' : Number(e.target.value))}
                   required
                 />
               </label>
@@ -237,7 +248,7 @@ export function TeacherDashboard() {
                   min={2}
                   max={6}
                   value={gradeValue}
-                  onChange={(e) => setGradeValue(Number(e.target.value))}
+                  onChange={(e) => setGradeValue(e.target.value === '' ? '' : Number(e.target.value))}
                   required
                 />
               </label>
@@ -285,7 +296,7 @@ export function TeacherDashboard() {
                             min={1}
                             max={8}
                             value={editSemester}
-                            onChange={(e) => setEditSemester(Number(e.target.value))}
+                            onChange={(e) => setEditSemester(e.target.value === '' ? '' : Number(e.target.value))}
                             required
                           />
                         </label>
@@ -296,7 +307,7 @@ export function TeacherDashboard() {
                             min={2}
                             max={6}
                             value={editGrade}
-                            onChange={(e) => setEditGrade(Number(e.target.value))}
+                            onChange={(e) => setEditGrade(e.target.value === '' ? '' : Number(e.target.value))}
                             required
                           />
                         </label>
