@@ -1,21 +1,29 @@
 package com.markly.backend.web;
 
 import com.markly.backend.domain.Role;
+import com.markly.backend.domain.StudentProfile;
 import com.markly.backend.domain.User;
 import com.markly.backend.repository.StudentProfileRepository;
 import com.markly.backend.repository.UserRepository;
 import com.markly.backend.security.AppUserPrincipal;
+import com.markly.backend.service.StudentProfileNormalizer;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.Locale;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -167,5 +175,49 @@ class AdminStudentProfileTest {
                         .content(body(otherStudentUsername, "1", "ABC123")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Този факултетен номер вече принадлежи на друг ученик"));
+    }
+
+    /**
+     * {@link AdminControllerUnitTest} proves the translation logic against a
+     * hand-built {@code ConstraintViolationException} carrying a hardcoded
+     * constraint name — it never touches a real database, so it can't tell
+     * us whether that literal is what the actual driver reports. This test
+     * bypasses {@code existsByFacultyNumberAndStudentNot} (the same pre-check
+     * gap a race between two concurrent requests would exploit) by writing
+     * both profiles straight through the repository, so the unique index
+     * from V8 is what has to reject the second insert — against the real H2
+     * instance (running in PostgreSQL compatibility mode) rather than a mock.
+     *
+     * <p>This is what caught {@code AdminController} matching the constraint
+     * name with strict {@code equals}: H2 (Hibernate resolves it to
+     * {@code H2Dialect} here despite the PostgreSQL-compatible JDBC URL, per
+     * {@code Database dialect: H2Dialect} in the test log) reports it
+     * schema-qualified and upper-cased as
+     * {@code PUBLIC.IDX_STUDENT_PROFILES_FACULTY_NUMBER}, not the bare
+     * {@code idx_student_profiles_faculty_number} a strict match expected —
+     * which would have silently fallen through to the generic 500. The
+     * assertion below mirrors the substring match {@code
+     * isFacultyNumberUniqueViolation} now uses, so this test locks in that
+     * whatever exact form a given driver reports, it still contains the
+     * index name.
+     */
+    @Test
+    void theRealDatabaseReportsAConstraintNameTheControllerCanMatch() {
+        StudentProfile first = new StudentProfile(studentUser);
+        first.setFacultyNumber(StudentProfileNormalizer.normalizeFacultyNumber("129999"));
+        studentProfileRepository.saveAndFlush(first);
+
+        StudentProfile second = new StudentProfile(otherStudentUser);
+        second.setFacultyNumber(StudentProfileNormalizer.normalizeFacultyNumber("129999"));
+
+        DataIntegrityViolationException thrown = assertThrows(DataIntegrityViolationException.class,
+                () -> studentProfileRepository.saveAndFlush(second));
+
+        assertInstanceOf(ConstraintViolationException.class, thrown.getCause());
+        String actualConstraintName = ((ConstraintViolationException) thrown.getCause()).getConstraintName();
+        assertTrue(actualConstraintName != null
+                        && actualConstraintName.toLowerCase(Locale.ROOT).contains("idx_student_profiles_faculty_number"),
+                "AdminController#isFacultyNumberUniqueViolation matches this literal as a substring against "
+                        + "whatever the driver actually reports; got '" + actualConstraintName + "'");
     }
 }

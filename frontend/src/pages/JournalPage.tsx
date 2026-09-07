@@ -8,7 +8,7 @@ import { useTeacherStudentLookup } from '../hooks/useTeacherStudentLookup';
 import { useGradeEditor } from '../hooks/useGradeEditor';
 import { useAddGradeForm } from '../hooks/useAddGradeForm';
 import { GradeFieldsForm } from '../components/GradeFieldsForm';
-import { DeleteGradeButton } from '../components/DeleteGradeButton';
+import { ConfirmDeleteButton } from '../components/ConfirmDeleteButton';
 import { byCreatedAt, FAIL_GRADE, gradeTypeLabel, groupBy } from '../utils/grades';
 
 const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -323,8 +323,8 @@ function TeacherJournal() {
                       <button type="button" onClick={() => editor.startEditing(g)}>
                         Редактирай
                       </button>
-                      <DeleteGradeButton
-                        gradeId={g.id}
+                      <ConfirmDeleteButton
+                        id={g.id}
                         confirmingDeleteId={editor.confirmingDeleteId}
                         deletingId={editor.deletingId}
                         onRequestDelete={editor.requestDelete}

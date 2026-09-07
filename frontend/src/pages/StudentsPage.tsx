@@ -5,7 +5,7 @@ import { useAllStudents } from '../hooks/useAllStudents';
 import { useGradeEditor } from '../hooks/useGradeEditor';
 import { useAddGradeForm } from '../hooks/useAddGradeForm';
 import { GradeFieldsForm } from '../components/GradeFieldsForm';
-import { DeleteGradeButton } from '../components/DeleteGradeButton';
+import { ConfirmDeleteButton } from '../components/ConfirmDeleteButton';
 import { byCreatedAt, FAIL_GRADE, gradeTypeLabel, groupBy, naturalCompare } from '../utils/grades';
 import type { StudentRosterSummary, TeacherGradeSummary } from '../types';
 
@@ -337,8 +337,8 @@ export function StudentsPage() {
                                   <button type="button" onClick={() => editor.startEditing(g)}>
                                     Редактирай
                                   </button>
-                                  <DeleteGradeButton
-                                    gradeId={g.id}
+                                  <ConfirmDeleteButton
+                                    id={g.id}
                                     confirmingDeleteId={editor.confirmingDeleteId}
                                     deletingId={editor.deletingId}
                                     onRequestDelete={editor.requestDelete}

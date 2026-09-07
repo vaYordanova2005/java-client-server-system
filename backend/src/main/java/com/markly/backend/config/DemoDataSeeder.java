@@ -12,6 +12,7 @@ import com.markly.backend.repository.GradeRepository;
 import com.markly.backend.repository.StudentProfileRepository;
 import com.markly.backend.repository.UserRepository;
 import com.markly.backend.service.StudentProfileNormalizer;
+import com.markly.backend.service.UserValidationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,10 +31,15 @@ import java.util.Random;
  * Seeds 8 teachers, 8 subjects, 20 students, and a spread of grades so the
  * dashboards have real data to render. Disabled by default — opt in with
  * {@code SEED_DEMO_DATA=true}. Skips itself once the first demo teacher
- * already exists, so it only ever runs once per database. Usernames/passwords
- * are generated to satisfy {@link com.markly.backend.service.UserValidationService}
- * so demo accounts behave exactly like admin-created ones; see README for the
- * shared demo credentials.
+ * already exists, so it only ever runs once per database. Each generated
+ * username/password pair is run through {@link
+ * com.markly.backend.service.UserValidationService#validateDemoPassword}
+ * before the account is created — the demo password is fixed by project
+ * decision and exempt from the character-class rule, but not from the
+ * length, common-password, or username-substring checks, so a change to
+ * {@link #DEMO_TEACHER_PASSWORD}/{@link #DEMO_STUDENT_PASSWORD} that made it
+ * actually weak fails the seed instead of silently creating accounts with
+ * it; see README for the shared demo credentials.
  */
 @Component
 public class DemoDataSeeder implements CommandLineRunner {
@@ -98,6 +104,7 @@ public class DemoDataSeeder implements CommandLineRunner {
     private final CalendarEventRepository calendarEventRepository;
     private final StudentProfileRepository studentProfileRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserValidationService userValidationService;
     private final boolean enabled;
 
     public DemoDataSeeder(
@@ -106,12 +113,14 @@ public class DemoDataSeeder implements CommandLineRunner {
             CalendarEventRepository calendarEventRepository,
             StudentProfileRepository studentProfileRepository,
             PasswordEncoder passwordEncoder,
+            UserValidationService userValidationService,
             @Value("${app.seed-demo-data.enabled:false}") boolean enabled) {
         this.userRepository = userRepository;
         this.gradeRepository = gradeRepository;
         this.calendarEventRepository = calendarEventRepository;
         this.studentProfileRepository = studentProfileRepository;
         this.passwordEncoder = passwordEncoder;
+        this.userValidationService = userValidationService;
         this.enabled = enabled;
     }
 
@@ -123,14 +132,18 @@ public class DemoDataSeeder implements CommandLineRunner {
         }
 
         List<User> teachers = TEACHER_HANDLES.stream()
-                .map(handle -> userRepository.save(
-                        new User(handle + "@uni-sofia.bg", passwordEncoder.encode(DEMO_TEACHER_PASSWORD), Role.TEACHER)))
+                .map(handle -> handle + "@uni-sofia.bg")
+                .map(username -> {
+                    userValidationService.validateDemoPassword(username, DEMO_TEACHER_PASSWORD);
+                    return userRepository.save(new User(username, passwordEncoder.encode(DEMO_TEACHER_PASSWORD), Role.TEACHER));
+                })
                 .toList();
 
         Random random = new Random(RANDOM_SEED);
         int gradeCount = 0;
         for (int i = 1; i <= STUDENT_COUNT; i++) {
             String username = "student" + i + "@uni-sofia.bg";
+            userValidationService.validateDemoPassword(username, DEMO_STUDENT_PASSWORD);
             User student = userRepository.save(
                     new User(username, passwordEncoder.encode(DEMO_STUDENT_PASSWORD), Role.STUDENT));
             int enrolledSemester = 1 + random.nextInt(8);

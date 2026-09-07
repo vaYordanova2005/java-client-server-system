@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -174,8 +175,20 @@ public class AdminController {
         // which would walk past ConstraintViolationException to that
         // SQLException and never match here.
         Throwable cause = ex.getCause();
-        return cause instanceof ConstraintViolationException constraintViolation
-                && FACULTY_NUMBER_UNIQUE_INDEX.equalsIgnoreCase(constraintViolation.getConstraintName());
+        if (!(cause instanceof ConstraintViolationException constraintViolation)) {
+            return false;
+        }
+        String constraintName = constraintViolation.getConstraintName();
+        // Substring, not equality: real PostgreSQL reports the bare index
+        // name ("idx_student_profiles_faculty_number"), but other Hibernate
+        // dialects can schema-qualify and upper-case it (H2, used in tests,
+        // reports "PUBLIC.IDX_STUDENT_PROFILES_FACULTY_NUMBER"). An exact
+        // match missed that second form and fell through to the generic 500
+        // — caught by AdminStudentProfileTest#theRealDatabaseReportsTheConstraintNameTheControllerMatchesAgainst,
+        // which triggers the real index against the test database instead of
+        // a hand-built exception.
+        return constraintName != null
+                && constraintName.toLowerCase(Locale.ROOT).contains(FACULTY_NUMBER_UNIQUE_INDEX);
     }
 
     private User findStudent(String username) {

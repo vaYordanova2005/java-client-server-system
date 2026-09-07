@@ -3,6 +3,7 @@ import { Layout } from '../routes/Layout';
 import { useAuth } from '../auth/useAuth';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import apiClient, { extractErrorMessage } from '../api/client';
+import { ConfirmDeleteButton } from '../components/ConfirmDeleteButton';
 import type { CalendarEventType } from '../types';
 import {
   buildMonthGrid,
@@ -14,48 +15,6 @@ import {
   TYPE_LABELS,
   WEEKDAY_LABELS,
 } from '../utils/calendar';
-
-interface DeleteEventActionProps {
-  eventId: number;
-  confirmingDeleteId: number | null;
-  deletingId: number | null;
-  onRequestDelete: (id: number) => void;
-  onCancelDelete: () => void;
-  onConfirmDelete: (id: number) => void;
-}
-
-function DeleteEventAction({
-  eventId,
-  confirmingDeleteId,
-  deletingId,
-  onRequestDelete,
-  onCancelDelete,
-  onConfirmDelete,
-}: DeleteEventActionProps) {
-  if (confirmingDeleteId === eventId) {
-    return (
-      <span className="calendar-delete-confirm">
-        <span>Сигурни ли сте?</span>
-        <button
-          type="button"
-          className="calendar-delete-btn"
-          onClick={() => onConfirmDelete(eventId)}
-          disabled={deletingId === eventId}
-        >
-          {deletingId === eventId ? 'Изтриване...' : 'Да, изтрий'}
-        </button>
-        <button type="button" onClick={onCancelDelete}>
-          Отказ
-        </button>
-      </span>
-    );
-  }
-  return (
-    <button type="button" className="calendar-delete-btn" onClick={() => onRequestDelete(eventId)}>
-      Изтрий
-    </button>
-  );
-}
 
 export function CalendarPage() {
   const { user } = useAuth();
@@ -333,13 +292,15 @@ export function CalendarPage() {
                     <p className="calendar-event-author">Добавил: {e.createdByUsername}</p>
                   </div>
                   {canManage && (
-                    <DeleteEventAction
-                      eventId={e.id}
+                    <ConfirmDeleteButton
+                      id={e.id}
                       confirmingDeleteId={confirmingDeleteId}
                       deletingId={deletingId}
                       onRequestDelete={requestDelete}
                       onCancelDelete={cancelDelete}
                       onConfirmDelete={confirmDelete}
+                      className="calendar-delete-btn"
+                      confirmWrapperClassName="calendar-delete-confirm"
                     />
                   )}
                 </li>
@@ -412,13 +373,15 @@ export function CalendarPage() {
                   </span>
                 </div>
                 {canManage && (
-                  <DeleteEventAction
-                    eventId={e.id}
+                  <ConfirmDeleteButton
+                    id={e.id}
                     confirmingDeleteId={confirmingDeleteId}
                     deletingId={deletingId}
                     onRequestDelete={requestDelete}
                     onCancelDelete={cancelDelete}
                     onConfirmDelete={confirmDelete}
+                    className="calendar-delete-btn"
+                    confirmWrapperClassName="calendar-delete-confirm"
                   />
                 )}
               </li>
