@@ -5,8 +5,16 @@ export const FAIL_GRADE = 2;
 const EXCELLENT_THRESHOLD = 5.5;
 const GOOD_THRESHOLD = 4.5;
 
-export function average(values: number[]): number {
-  if (values.length === 0) return 0;
+/**
+ * `null` for an empty input rather than `0` — a 0 renders identically to a
+ * genuine average of 0 (and `tierColor(0)` would paint it red as if it were
+ * a real, terrible average), silently lying about there being data at all.
+ * Every current caller already guards with a `.length` check before calling
+ * this, so `null` never actually reaches them; it exists for the next
+ * caller that doesn't.
+ */
+export function average(values: number[]): number | null {
+  if (values.length === 0) return null;
   return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
@@ -74,7 +82,9 @@ export function subjectAverages<T extends { subject: string; grade: number }>(gr
   return [...groupBy(grades, (g) => g.subject).entries()]
     .map(([subject, entries]) => ({
       subject,
-      avg: average(entries.map((g) => g.grade)),
+      // groupBy only ever creates a bucket by pushing to it, so `entries` is
+      // never empty here — average() only returns null for `[]`.
+      avg: average(entries.map((g) => g.grade))!,
       count: entries.length,
     }))
     .sort((a, b) => b.avg - a.avg);
@@ -88,7 +98,8 @@ export function semesterAverages<T extends { semester: number; grade: number }>(
   return [...groupBy(grades, (g) => g.semester).entries()]
     .map(([semester, entries]) => ({
       semester,
-      avg: average(entries.map((g) => g.grade)),
+      // Same reasoning as subjectAverages above: entries is never empty.
+      avg: average(entries.map((g) => g.grade))!,
       count: entries.length,
     }))
     .sort((a, b) => a.semester - b.semester);

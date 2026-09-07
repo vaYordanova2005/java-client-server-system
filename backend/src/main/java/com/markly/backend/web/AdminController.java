@@ -14,6 +14,7 @@ import com.markly.backend.web.dto.UpsertStudentProfileRequest;
 import com.markly.backend.web.dto.UserResponse;
 import com.markly.backend.security.AppUserPrincipal;
 import jakarta.validation.Valid;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,6 +31,9 @@ import org.slf4j.LoggerFactory;
 public class AdminController {
 
     private static final Logger audit = LoggerFactory.getLogger("com.markly.audit");
+
+    /** Name of the unique index from V8, matched below to scope the DataIntegrityViolationException catch. */
+    private static final String FACULTY_NUMBER_UNIQUE_INDEX = "idx_student_profiles_faculty_number";
 
     private final UserRepository userRepository;
     private final UserValidationService userValidationService;
@@ -149,8 +153,29 @@ public class AdminController {
             // (V8) is what actually catches that race, and it fails as a
             // generic constraint violation rather than the friendly message
             // above. Same user-facing outcome either way: 400, not 500.
+            //
+            // Only rewritten when it's actually that index: this table has
+            // exactly one constraint today, but a future NOT NULL or foreign
+            // key added here would also come through as a
+            // DataIntegrityViolationException, and mislabeling *that* as a
+            // duplicate faculty number would be more confusing than the raw
+            // 500 it would otherwise produce.
+            if (!isFacultyNumberUniqueViolation(ex)) {
+                throw ex;
+            }
             throw new IllegalArgumentException("Този факултетен номер вече принадлежи на друг ученик");
         }
+    }
+
+    private boolean isFacultyNumberUniqueViolation(DataIntegrityViolationException ex) {
+        // Spring's translator wraps the Hibernate exception one level deep
+        // (DataIntegrityViolationException -> ConstraintViolationException ->
+        // the driver's SQLException) — getCause(), not getMostSpecificCause(),
+        // which would walk past ConstraintViolationException to that
+        // SQLException and never match here.
+        Throwable cause = ex.getCause();
+        return cause instanceof ConstraintViolationException constraintViolation
+                && FACULTY_NUMBER_UNIQUE_INDEX.equalsIgnoreCase(constraintViolation.getConstraintName());
     }
 
     private User findStudent(String username) {

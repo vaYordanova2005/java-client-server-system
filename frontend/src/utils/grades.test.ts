@@ -60,6 +60,10 @@ describe('averages', () => {
   it('averages plain values', () => {
     expect(average([2, 6])).toBe(4);
   });
+
+  it('returns null rather than a misleading 0 for an empty input', () => {
+    expect(average([])).toBeNull();
+  });
 });
 
 describe('gradeColor', () => {

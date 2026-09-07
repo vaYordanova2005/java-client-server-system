@@ -51,7 +51,8 @@ function StudentStatistics() {
   const stats = useMemo(() => {
     if (grades.length === 0) return null;
 
-    const overallAvg = average(grades.map((g) => g.grade));
+    // grades.length > 0 here, so this can never be the empty-input case.
+    const overallAvg = average(grades.map((g) => g.grade))!;
 
     const distribution = GRADE_VALUES.map((value) => {
       const count = grades.filter((g) => g.grade === value).length;
@@ -68,7 +69,8 @@ function StudentStatistics() {
     const subjectMatrix = bySubject.map(({ subject }) => {
       const bySem = new Map<number, number>();
       for (const [semester, entries] of groupBy(gradesBySubject.get(subject) ?? [], (g) => g.semester)) {
-        bySem.set(semester, average(entries.map((g) => g.grade)));
+        // Same as above: entries comes from groupBy, so it's never empty.
+        bySem.set(semester, average(entries.map((g) => g.grade))!);
       }
       const measured = [...bySem.entries()].sort((a, b) => a[0] - b[0]);
       let trend: 'up' | 'down' | 'flat' | null = null;
@@ -296,7 +298,8 @@ function TeacherStatistics() {
   const stats = useMemo(() => {
     if (grades.length === 0) return null;
 
-    const overallAvg = average(grades.map((g) => g.grade));
+    // grades.length > 0 here, so this can never be the empty-input case.
+    const overallAvg = average(grades.map((g) => g.grade))!;
     const distribution = GRADE_VALUES.map((value) => {
       const count = grades.filter((g) => g.grade === value).length;
       return { value, count, pct: (count / grades.length) * 100 };

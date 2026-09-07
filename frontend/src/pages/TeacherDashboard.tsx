@@ -21,7 +21,8 @@ export function TeacherDashboard() {
   const stats = useMemo(() => {
     if (grades.length === 0) return null;
     return {
-      overallAvg: average(grades.map((g) => g.grade)),
+      // grades.length > 0 here, so this can never be the empty-input case.
+      overallAvg: average(grades.map((g) => g.grade))!,
       studentCount: new Set(grades.map((g) => g.studentUsername)).size,
       subjectCount: new Set(grades.map((g) => g.subject)).size,
     };
@@ -40,7 +41,8 @@ export function TeacherDashboard() {
       .map(([studentUsername, entries]) => ({
         studentUsername,
         facultyNumber: entries[0].facultyNumber,
-        avg: average(entries.map((g) => g.grade)),
+        // entries comes from groupBy, so it's never empty.
+        avg: average(entries.map((g) => g.grade))!,
         failSubjects: [...new Set(entries.filter((g) => g.grade === FAIL_GRADE).map((g) => g.subject))],
       }))
       .filter((s) => s.failSubjects.length > 0 || s.avg < WATCHLIST_AVG_THRESHOLD)

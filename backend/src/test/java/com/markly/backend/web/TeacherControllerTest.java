@@ -152,6 +152,50 @@ class TeacherControllerTest {
                         .param("query", studentUsername)
                         .with(user(new AppUserPrincipal(student))))
                 .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/teacher/students").with(user(new AppUserPrincipal(admin))))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/teacher/students").with(user(new AppUserPrincipal(student))))
+                .andExpect(status().isForbidden());
+    }
+
+    // --- full roster ---
+
+    @Test
+    void allStudentsIncludesStudentsWithNoGradesAtAll() throws Exception {
+        // No grade, from any teacher, is ever recorded for this student —
+        // that's exactly the case myGrades() misses and allStudents() has to
+        // cover: a teacher with zero grades on record must still be able to
+        // find every student, not just ones someone has already graded.
+        String ungradedUsername = "ungraded-" + UUID.randomUUID() + "@uni-sofia.bg";
+        User ungraded = userRepository.save(new User(ungradedUsername, "{noop}irrelevant", Role.STUDENT));
+        createdUserIds.add(ungraded.getId());
+
+        saveGrade(teacher, "Програмиране", 1, 6);
+
+        mockMvc.perform(get("/api/teacher/students").with(user(new AppUserPrincipal(teacher))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].studentUsername", org.hamcrest.Matchers.hasItem(ungradedUsername)))
+                .andExpect(jsonPath("$[*].studentUsername", org.hamcrest.Matchers.hasItem(studentUsername)));
+    }
+
+    @Test
+    void allStudentsIncludesTheProfileFieldsWhenSet() throws Exception {
+        profileWithFacultyNumber("F99999");
+
+        mockMvc.perform(get("/api/teacher/students").with(user(new AppUserPrincipal(teacher))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.studentUsername == '" + studentUsername + "')].facultyNumber")
+                        .value(org.hamcrest.Matchers.contains("F99999")))
+                .andExpect(jsonPath("$[?(@.studentUsername == '" + studentUsername + "')].groupNumber")
+                        .value(org.hamcrest.Matchers.contains("41")));
+    }
+
+    @Test
+    void allStudentsExcludesNonStudentAccounts() throws Exception {
+        mockMvc.perform(get("/api/teacher/students").with(user(new AppUserPrincipal(teacher))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].studentUsername", org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.hasItem(teacher.getUsername()))));
     }
 
     // --- own grades ---

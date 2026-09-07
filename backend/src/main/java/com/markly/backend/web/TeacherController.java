@@ -82,6 +82,18 @@ public class TeacherController {
      * first time, with no way to find them. The frontend roster page builds
      * its specialty/group tree from this endpoint and overlays this
      * teacher's own grades (from {@link #myGrades}) on top.
+     *
+     * <p>Deliberately unpaginated and unscoped: it returns the whole
+     * directory (every student's email and faculty number) to any
+     * authenticated teacher, sorted in memory on every call. There is no
+     * teacher-to-group assignment anywhere in this domain model to scope by
+     * — a teacher may legitimately need to grade a student outside their
+     * usual groups — so "my groups only" isn't a fix available today without
+     * adding that concept first. Fine at this app's scale (a few dozen
+     * students); if the roster grows into the thousands or the lack of
+     * per-teacher scoping becomes a real privacy concern, this needs
+     * pagination and/or a teacher-group mapping to filter by, not a
+     * band-aid on this method.
      */
     @GetMapping("/students")
     public List<StudentRosterResponse> allStudents() {
