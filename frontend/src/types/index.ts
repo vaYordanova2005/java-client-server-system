@@ -76,6 +76,20 @@ export interface StudentLookupSummary {
   enrolledSemester: number | null;
 }
 
+/**
+ * Mirrors the backend's `StudentRosterResponse` from `GET
+ * /teacher/students` — every student, regardless of whether the requesting
+ * teacher (or anyone) has graded them yet. Deliberately narrower than
+ * {@link TeacherGradeSummary}: this has no subject/grade/semester, since a
+ * roster entry doesn't come from a grade row at all.
+ */
+export interface StudentRosterSummary {
+  studentUsername: string;
+  facultyNumber: string | null;
+  specialty: string | null;
+  groupNumber: string | null;
+}
+
 export interface StudentProfileSummary {
   studentUsername: string;
   degreeLevel: string | null;

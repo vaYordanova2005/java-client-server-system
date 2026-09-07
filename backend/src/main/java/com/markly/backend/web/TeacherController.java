@@ -12,6 +12,7 @@ import com.markly.backend.service.StudentProfileNormalizer;
 import com.markly.backend.web.dto.CreateGradeRequest;
 import com.markly.backend.web.dto.GradeResponse;
 import com.markly.backend.web.dto.StudentLookupResponse;
+import com.markly.backend.web.dto.StudentRosterResponse;
 import com.markly.backend.web.dto.TeacherGradeResponse;
 import com.markly.backend.web.dto.UpdateGradeRequest;
 import jakarta.validation.Valid;
@@ -20,6 +21,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -64,12 +66,34 @@ public class TeacherController {
             }
         }
 
-        User student = userRepository.findByUsernameIgnoreCase(query)
+        User student = userRepository.findByUsernameIgnoreCase(query.trim())
                 .filter(u -> u.getRole() == Role.STUDENT)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Няма ученик с такъв факултетен номер или имейл"));
         return studentProfileRepository.findByStudent(student)
                 .map(profile -> StudentLookupResponse.from(profile, student.getUsername()))
                 .orElseGet(() -> StudentLookupResponse.empty(student.getUsername()));
+    }
+
+    /**
+     * Every student, regardless of whether this (or any) teacher has entered
+     * a grade for them yet — {@link #myGrades} only surfaces students who
+     * already have at least one grade from this teacher, which leaves a
+     * teacher with zero grades on record, or one grading a student for the
+     * first time, with no way to find them. The frontend roster page builds
+     * its specialty/group tree from this endpoint and overlays this
+     * teacher's own grades (from {@link #myGrades}) on top.
+     */
+    @GetMapping("/students")
+    public List<StudentRosterResponse> allStudents() {
+        List<User> students = userRepository.findByRole(Role.STUDENT);
+        Map<Long, StudentProfile> profilesByStudentId = students.isEmpty()
+                ? Map.of()
+                : studentProfileRepository.findByStudentIn(students).stream()
+                        .collect(Collectors.toMap(p -> p.getStudent().getId(), p -> p));
+        return students.stream()
+                .map(s -> StudentRosterResponse.from(s, profilesByStudentId.get(s.getId())))
+                .sorted(Comparator.comparing(StudentRosterResponse::studentUsername, String.CASE_INSENSITIVE_ORDER))
+                .toList();
     }
 
     /**

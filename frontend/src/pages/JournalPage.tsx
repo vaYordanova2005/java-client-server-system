@@ -5,9 +5,11 @@ import { useStudentGrades } from '../hooks/useStudentGrades';
 import { useStudentProfile } from '../hooks/useStudentProfile';
 import { useTeacherGrades } from '../hooks/useTeacherGrades';
 import { useTeacherStudentLookup } from '../hooks/useTeacherStudentLookup';
-import apiClient, { extractErrorMessage } from '../api/client';
-import { byCreatedAt, FAIL_GRADE, GRADE_TYPE_LABELS, GRADE_TYPES, groupBy } from '../utils/grades';
-import type { GradeType, TeacherGradeSummary } from '../types';
+import { useGradeEditor } from '../hooks/useGradeEditor';
+import { useAddGradeForm } from '../hooks/useAddGradeForm';
+import { GradeFieldsForm } from '../components/GradeFieldsForm';
+import { DeleteGradeButton } from '../components/DeleteGradeButton';
+import { byCreatedAt, FAIL_GRADE, gradeTypeLabel, groupBy } from '../utils/grades';
 
 const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
 const RECENT_COUNT = 10;
@@ -125,7 +127,7 @@ function StudentJournal() {
                                   <td colSpan={2}>
                                     <div className="grade-detail" id={`grade-detail-${g.id}`}>
                                       <div>Дата: {new Date(g.createdAt).toLocaleDateString('bg-BG')}</div>
-                                      <div>Тип: {GRADE_TYPE_LABELS[g.gradeType]}</div>
+                                      <div>Тип: {gradeTypeLabel(g.gradeType)}</div>
                                       <div>Преподавател: {g.teacherUsername ?? '—'}</div>
                                     </div>
                                   </td>
@@ -159,35 +161,22 @@ function TeacherJournal() {
   } = useTeacherStudentLookup();
 
   const [query, setQuery] = useState('');
-  const [subject, setSubject] = useState('');
-  // '' while the field is empty mid-edit — coercing straight to 0 on every
-  // keystroke (via `Number('')`) meant clearing the field to type a new
-  // value showed a flashing "0" instead of staying blank.
-  const [semester, setSemester] = useState<number | ''>(1);
-  const [gradeValue, setGradeValue] = useState<number | ''>(6);
-  const [gradeType, setGradeType] = useState<GradeType>('REGULAR');
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editSubject, setEditSubject] = useState('');
-  const [editSemester, setEditSemester] = useState<number | ''>(1);
-  const [editGrade, setEditGrade] = useState<number | ''>(6);
-  const [editGradeType, setEditGradeType] = useState<GradeType>('REGULAR');
-  const [editSubmitting, setEditSubmitting] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const addForm = useAddGradeForm(reload);
+  const editor = useGradeEditor(reload);
 
   // The backend already orders by createdAt desc, so the first N are the
   // most recently entered grades.
   const recentGrades = grades.slice(0, RECENT_COUNT);
 
+  // Suggestions for the subject combobox: this teacher's own subjects. A
+  // teacher with no grades on record yet just sees an empty, still-typable
+  // list instead of being blocked — the input itself accepts free text.
   const subjects = useMemo(() => [...new Set(grades.map((g) => g.subject))].sort(), [grades]);
 
   const handleLookup = async (event: FormEvent) => {
     event.preventDefault();
-    setSubmitError(null);
     setSubmitSuccess(null);
     await lookup(query);
   };
@@ -195,89 +184,22 @@ function TeacherJournal() {
   const handleChangeStudent = () => {
     resetLookup();
     setQuery('');
-    setSubmitError(null);
     setSubmitSuccess(null);
+    addForm.reset();
   };
 
   const handleSubmitGrade = async (event: FormEvent) => {
     event.preventDefault();
     if (!student) return;
-    setSubmitError(null);
     setSubmitSuccess(null);
-    if (semester === '' || gradeValue === '') {
-      setSubmitError('Моля, въведете семестър и оценка.');
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await apiClient.post('/teacher/grades', {
-        studentUsername: student.username,
-        subject,
-        semester,
-        grade: gradeValue,
-        gradeType,
-      });
-      setSubmitSuccess(`Оценка ${gradeValue} по ${subject} записана за ${student.username}`);
+    const subjectAtSubmit = addForm.subject;
+    const gradeAtSubmit = addForm.grade;
+    const ok = await addForm.submit(student.username);
+    if (ok) {
+      setSubmitSuccess(`Оценка ${gradeAtSubmit} по ${subjectAtSubmit} записана за ${student.username}`);
       // Subject clears so the next grade for the same student starts blank;
       // semester/grade stay as a convenience when entering several in a row.
-      setSubject('');
-      reload();
-    } catch (err) {
-      setSubmitError(extractErrorMessage(err));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const startEditing = (g: TeacherGradeSummary) => {
-    setEditingId(g.id);
-    setEditSubject(g.subject);
-    setEditSemester(g.semester);
-    setEditGrade(g.grade);
-    setEditGradeType(g.gradeType);
-    setEditError(null);
-  };
-
-  const cancelEditing = () => {
-    setEditingId(null);
-    setEditError(null);
-  };
-
-  const handleSaveEdit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (editingId === null) return;
-    setEditError(null);
-    if (editSemester === '' || editGrade === '') {
-      setEditError('Моля, въведете семестър и оценка.');
-      return;
-    }
-    setEditSubmitting(true);
-    try {
-      await apiClient.put(`/teacher/grades/${editingId}`, {
-        subject: editSubject,
-        semester: editSemester,
-        grade: editGrade,
-        gradeType: editGradeType,
-      });
-      setEditingId(null);
-      reload();
-    } catch (err) {
-      setEditError(extractErrorMessage(err));
-    } finally {
-      setEditSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('Да се изтрие ли тази оценка?')) return;
-    setDeletingId(id);
-    try {
-      await apiClient.delete(`/teacher/grades/${id}`);
-      reload();
-    } catch (err) {
-      window.alert(extractErrorMessage(err));
-    } finally {
-      setDeletingId(null);
+      addForm.setSubject('');
     }
   };
 
@@ -324,59 +246,25 @@ function TeacherJournal() {
               </button>
             </p>
 
-            <form onSubmit={handleSubmitGrade} className="inline-form">
-              <label>
-                Предмет
-                <select value={subject} onChange={(e) => setSubject(e.target.value)} required>
-                  <option value="" disabled>
-                    Изберете предмет
-                  </option>
-                  {subjects.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Семестър
-                <input
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={semester}
-                  onChange={(e) => setSemester(e.target.value === '' ? '' : Number(e.target.value))}
-                  required
-                />
-              </label>
-              <label>
-                Оценка
-                <input
-                  type="number"
-                  min={2}
-                  max={6}
-                  value={gradeValue}
-                  onChange={(e) => setGradeValue(e.target.value === '' ? '' : Number(e.target.value))}
-                  required
-                />
-              </label>
-              <label>
-                Тип
-                <select value={gradeType} onChange={(e) => setGradeType(e.target.value as GradeType)}>
-                  {GRADE_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {GRADE_TYPE_LABELS[t]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button type="submit" disabled={submitting}>
-                {submitting ? 'Записване...' : 'Запиши'}
-              </button>
-            </form>
+            <GradeFieldsForm
+              onSubmit={handleSubmitGrade}
+              subject={addForm.subject}
+              onSubjectChange={addForm.setSubject}
+              subjectOptions={subjects}
+              datalistId="journal-add-subjects"
+              semester={addForm.semester}
+              onSemesterChange={addForm.setSemester}
+              grade={addForm.grade}
+              onGradeChange={addForm.setGrade}
+              gradeType={addForm.gradeType}
+              onGradeTypeChange={addForm.setGradeType}
+              submitting={addForm.submitting}
+              submitLabel="Запиши"
+              submittingLabel="Записване..."
+            />
           </>
         )}
-        {submitError && <p className="error">{submitError}</p>}
+        {addForm.error && <p className="error">{addForm.error}</p>}
         {submitSuccess && <p className="success">{submitSuccess}</p>}
       </section>
 
@@ -384,6 +272,7 @@ function TeacherJournal() {
         <summary>Последно въведени оценки</summary>
         {gradesLoading && <p>Зареждане...</p>}
         {gradesError && <p className="error">{gradesError}</p>}
+        {editor.deleteError && <p className="error">{editor.deleteError}</p>}
         {!gradesLoading && !gradesError && recentGrades.length === 0 && <p>Все още няма въведени оценки.</p>}
         {recentGrades.length > 0 && (
           <table>
@@ -399,61 +288,28 @@ function TeacherJournal() {
             </thead>
             <tbody>
               {recentGrades.map((g) =>
-                editingId === g.id ? (
+                editor.editingId === g.id ? (
                   <tr key={g.id}>
                     <td colSpan={6}>
-                      <form onSubmit={handleSaveEdit} className="inline-form">
-                        <span>{g.studentUsername}</span>
-                        <label>
-                          Предмет
-                          <select value={editSubject} onChange={(e) => setEditSubject(e.target.value)} required>
-                            {subjects.map((s) => (
-                              <option key={s} value={s}>
-                                {s}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          Семестър
-                          <input
-                            type="number"
-                            min={1}
-                            max={8}
-                            value={editSemester}
-                            onChange={(e) => setEditSemester(e.target.value === '' ? '' : Number(e.target.value))}
-                            required
-                          />
-                        </label>
-                        <label>
-                          Оценка
-                          <input
-                            type="number"
-                            min={2}
-                            max={6}
-                            value={editGrade}
-                            onChange={(e) => setEditGrade(e.target.value === '' ? '' : Number(e.target.value))}
-                            required
-                          />
-                        </label>
-                        <label>
-                          Тип
-                          <select value={editGradeType} onChange={(e) => setEditGradeType(e.target.value as GradeType)}>
-                            {GRADE_TYPES.map((t) => (
-                              <option key={t} value={t}>
-                                {GRADE_TYPE_LABELS[t]}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <button type="submit" disabled={editSubmitting}>
-                          {editSubmitting ? 'Записване...' : 'Запази'}
-                        </button>
-                        <button type="button" onClick={cancelEditing}>
-                          Отказ
-                        </button>
-                      </form>
-                      {editError && <p className="error">{editError}</p>}
+                      <GradeFieldsForm
+                        onSubmit={editor.handleSaveEdit}
+                        leading={<span>{g.studentUsername}</span>}
+                        subject={editor.editSubject}
+                        onSubjectChange={editor.setEditSubject}
+                        subjectOptions={subjects}
+                        datalistId="journal-edit-subjects"
+                        semester={editor.editSemester}
+                        onSemesterChange={editor.setEditSemester}
+                        grade={editor.editGrade}
+                        onGradeChange={editor.setEditGrade}
+                        gradeType={editor.editGradeType}
+                        onGradeTypeChange={editor.setEditGradeType}
+                        submitting={editor.editSubmitting}
+                        submitLabel="Запази"
+                        submittingLabel="Записване..."
+                        onCancel={editor.cancelEditing}
+                      />
+                      {editor.editError && <p className="error">{editor.editError}</p>}
                     </td>
                   </tr>
                 ) : (
@@ -462,14 +318,19 @@ function TeacherJournal() {
                     <td>{g.subject}</td>
                     <td>{g.semester}</td>
                     <td>{g.grade}</td>
-                    <td>{GRADE_TYPE_LABELS[g.gradeType]}</td>
+                    <td>{gradeTypeLabel(g.gradeType)}</td>
                     <td className="user-actions">
-                      <button type="button" onClick={() => startEditing(g)}>
+                      <button type="button" onClick={() => editor.startEditing(g)}>
                         Редактирай
                       </button>
-                      <button type="button" onClick={() => handleDelete(g.id)} disabled={deletingId === g.id}>
-                        {deletingId === g.id ? 'Изтриване...' : 'Изтрий'}
-                      </button>
+                      <DeleteGradeButton
+                        gradeId={g.id}
+                        confirmingDeleteId={editor.confirmingDeleteId}
+                        deletingId={editor.deletingId}
+                        onRequestDelete={editor.requestDelete}
+                        onCancelDelete={editor.cancelDelete}
+                        onConfirmDelete={editor.confirmDelete}
+                      />
                     </td>
                   </tr>
                 )

@@ -6,6 +6,7 @@ const EXCELLENT_THRESHOLD = 5.5;
 const GOOD_THRESHOLD = 4.5;
 
 export function average(values: number[]): number {
+  if (values.length === 0) return 0;
   return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
@@ -118,3 +119,13 @@ export const GRADE_TYPE_LABELS: Record<GradeType, string> = {
   REGULAR: 'Редовна сесия',
   RETAKE: 'Поправителна сесия',
 };
+
+/**
+ * {@link GRADE_TYPE_LABELS} is indexed by every caller directly, which
+ * renders the literal string `undefined` for a type the map doesn't know
+ * about — legacy data or a value added on the backend before the frontend
+ * catches up. This falls back to a dash instead.
+ */
+export function gradeTypeLabel(type: GradeType | null | undefined): string {
+  return (type && GRADE_TYPE_LABELS[type]) || '—';
+}

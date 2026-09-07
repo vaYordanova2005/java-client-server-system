@@ -6,6 +6,15 @@ spring:
     # init can push Tomcat's actual listen-start past the platform's
     # port-scan timeout. Lazy init defers non-essential beans to first use,
     # cutting context startup time.
+    #
+    # WARNING: this is a global switch, not a targeted fix. It is safe today
+    # because nothing in the app is @Scheduled/@EventListener/@PostConstruct
+    # (a bean nobody ever injects or looks up is never instantiated at all,
+    # so its side effects silently never run — no error, no log). The first
+    # such bean added later needs either an explicit `@Lazy(false)`/
+    # `ApplicationRunner`-style eager trigger, or this flag should be swapped
+    # for a narrower fix (e.g. `spring.jmx.enabled: false` plus disabling the
+    # specific slow autoconfigurations) before it's added.
     lazy-initialization: true
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:markly}?sslmode=${DB_SSLMODE:disable}

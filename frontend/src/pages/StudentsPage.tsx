@@ -1,20 +1,35 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Layout } from '../routes/Layout';
 import { useTeacherGrades } from '../hooks/useTeacherGrades';
-import apiClient, { extractErrorMessage } from '../api/client';
-import { byCreatedAt, FAIL_GRADE, GRADE_TYPE_LABELS, GRADE_TYPES, groupBy, naturalCompare } from '../utils/grades';
-import type { GradeType, TeacherGradeSummary } from '../types';
+import { useAllStudents } from '../hooks/useAllStudents';
+import { useGradeEditor } from '../hooks/useGradeEditor';
+import { useAddGradeForm } from '../hooks/useAddGradeForm';
+import { GradeFieldsForm } from '../components/GradeFieldsForm';
+import { DeleteGradeButton } from '../components/DeleteGradeButton';
+import { byCreatedAt, FAIL_GRADE, gradeTypeLabel, groupBy, naturalCompare } from '../utils/grades';
+import type { StudentRosterSummary, TeacherGradeSummary } from '../types';
 
 /**
- * Specialty and group are optional on a student profile, so grades for a
- * student the admin hasn't filled in a profile for yet still need a bucket
- * to land in — dropping them would hide real grades from the teacher who
- * entered them.
+ * Specialty and group are optional on a student profile, so a student the
+ * admin hasn't filled in a profile for yet still needs a bucket to land in —
+ * dropping them would hide real students (and their grades) from the page.
  */
 const UNKNOWN = 'Без специалност/група';
 
+interface StudentEntry {
+  studentUsername: string;
+  facultyNumber: string | null;
+  bySemester: { semester: number; subjectRows: { subject: string; entries: TeacherGradeSummary[] }[] }[];
+}
+
 export function StudentsPage() {
-  const { grades, error, loading, reload } = useTeacherGrades();
+  // The roster (every student, from every teacher's perspective) drives who
+  // shows up on the page; `grades` (this teacher's own) is overlaid onto
+  // each roster entry. Building the page from `grades` alone — as it used
+  // to — meant a student nobody has graded yet, or one this teacher has
+  // never taught, simply never appeared.
+  const { students, error: rosterError, loading: rosterLoading } = useAllStudents();
+  const { grades, error: gradesError, loading: gradesLoading, reload } = useTeacherGrades();
 
   const [studentFilter, setStudentFilter] = useState('');
   const [specialtyFilter, setSpecialtyFilter] = useState('');
@@ -22,31 +37,18 @@ export function StudentsPage() {
   const [subjectFilter, setSubjectFilter] = useState('');
   const [semesterFilter, setSemesterFilter] = useState('');
 
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editSubject, setEditSubject] = useState('');
-  // '' while the field is empty mid-edit — coercing straight to 0 on every
-  // keystroke (via `Number('')`) meant clearing the field to type a new
-  // value showed a flashing "0" instead of staying blank.
-  const [editSemester, setEditSemester] = useState<number | ''>(1);
-  const [editGrade, setEditGrade] = useState<number | ''>(6);
-  const [editGradeType, setEditGradeType] = useState<GradeType>('REGULAR');
-  const [editSubmitting, setEditSubmitting] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-
+  const editor = useGradeEditor(reload);
+  const addForm = useAddGradeForm(reload);
   const [addingFor, setAddingFor] = useState<string | null>(null);
-  const [addSubject, setAddSubject] = useState('');
-  const [addSemester, setAddSemester] = useState<number | ''>(1);
-  const [addGrade, setAddGrade] = useState<number | ''>(6);
-  const [addGradeType, setAddGradeType] = useState<GradeType>('REGULAR');
-  const [addSubmitting, setAddSubmitting] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
+
+  const loading = rosterLoading || gradesLoading;
+  const error = rosterError ?? gradesError;
 
   const subjects = useMemo(() => [...new Set(grades.map((g) => g.subject))].sort(), [grades]);
   const semesters = useMemo(() => [...new Set(grades.map((g) => g.semester))].sort((a, b) => a - b), [grades]);
   const specialties = useMemo(
-    () => [...new Set(grades.map((g) => g.specialty ?? UNKNOWN))].sort(naturalCompare),
-    [grades]
+    () => [...new Set(students.map((s) => s.specialty ?? UNKNOWN))].sort(naturalCompare),
+    [students]
   );
 
   // Group numbers repeat across specialties (every specialty has a group 1),
@@ -55,162 +57,106 @@ export function StudentsPage() {
   const groupNumbers = useMemo(
     () => [
       ...new Set(
-        grades
-          .filter((g) => !specialtyFilter || (g.specialty ?? UNKNOWN) === specialtyFilter)
-          .map((g) => g.groupNumber ?? UNKNOWN)
+        students
+          .filter((s) => !specialtyFilter || (s.specialty ?? UNKNOWN) === specialtyFilter)
+          .map((s) => s.groupNumber ?? UNKNOWN)
       ),
     ].sort(naturalCompare),
-    [grades, specialtyFilter]
+    [students, specialtyFilter]
   );
 
-  const filteredGrades = useMemo(() => {
+  const gradesByStudent = useMemo(() => groupBy(grades, (g) => g.studentUsername), [grades]);
+
+  const filteredRoster = useMemo(() => {
     const needle = studentFilter.trim().toLowerCase();
-    return grades.filter(
-      (g) =>
+    return students.filter(
+      (s) =>
         // Email or faculty number — a roster usually carries faculty numbers,
         // the same reason /teacher/students/lookup accepts either.
         (!needle ||
-          g.studentUsername.toLowerCase().includes(needle) ||
-          (g.facultyNumber ?? '').toLowerCase().includes(needle)) &&
-        (!specialtyFilter || (g.specialty ?? UNKNOWN) === specialtyFilter) &&
-        (!groupFilter || (g.groupNumber ?? UNKNOWN) === groupFilter) &&
-        (!subjectFilter || g.subject === subjectFilter) &&
-        (!semesterFilter || g.semester === Number(semesterFilter))
+          s.studentUsername.toLowerCase().includes(needle) ||
+          (s.facultyNumber ?? '').toLowerCase().includes(needle)) &&
+        (!specialtyFilter || (s.specialty ?? UNKNOWN) === specialtyFilter) &&
+        (!groupFilter || (s.groupNumber ?? UNKNOWN) === groupFilter)
     );
-  }, [grades, studentFilter, specialtyFilter, groupFilter, subjectFilter, semesterFilter]);
+  }, [students, studentFilter, specialtyFilter, groupFilter]);
 
   /**
    * Specialty -> group -> student -> semester -> subject. A teacher works
    * with one group at a time, so a flat student list would mean scrolling
    * past every other specialty's students to reach the right one.
+   *
+   * The subject/semester filters narrow which of *this teacher's* grades
+   * show under a student, not which students appear — except when one of
+   * them is set, in which case a student with no matching grade drops out
+   * entirely (the filter is asking "who has a grade in X", so an empty
+   * result for that student isn't useful to show).
    */
   const bySpecialty = useMemo(() => {
-    const studentsOf = (entries: TeacherGradeSummary[]) =>
-      [...groupBy(entries, (g) => g.studentUsername).entries()]
-        .map(([studentUsername, studentEntries]) => ({
-          studentUsername,
-          facultyNumber: studentEntries[0].facultyNumber,
-          bySemester: [...groupBy(studentEntries, (g) => g.semester).entries()]
-            .map(([semester, semesterEntries]) => ({
-              semester,
-              subjectRows: [...groupBy(semesterEntries, (g) => g.subject).entries()]
-                .map(([subject, subjectEntries]) => ({
-                  subject,
-                  entries: [...subjectEntries].sort(byCreatedAt),
-                }))
-                .sort((a, b) => a.subject.localeCompare(b.subject)),
-            }))
-            .sort((a, b) => a.semester - b.semester),
-        }))
+    const studentsOf = (entries: StudentRosterSummary[]): StudentEntry[] =>
+      entries
+        .map((r): StudentEntry | null => {
+          const studentGrades = (gradesByStudent.get(r.studentUsername) ?? []).filter(
+            (g) =>
+              (!subjectFilter || g.subject === subjectFilter) &&
+              (!semesterFilter || g.semester === Number(semesterFilter))
+          );
+          if ((subjectFilter || semesterFilter) && studentGrades.length === 0) return null;
+          return {
+            studentUsername: r.studentUsername,
+            facultyNumber: r.facultyNumber,
+            bySemester: [...groupBy(studentGrades, (g) => g.semester).entries()]
+              .map(([semester, semesterEntries]) => ({
+                semester,
+                subjectRows: [...groupBy(semesterEntries, (g) => g.subject).entries()]
+                  .map(([subject, subjectEntries]) => ({
+                    subject,
+                    entries: [...subjectEntries].sort(byCreatedAt),
+                  }))
+                  .sort((a, b) => a.subject.localeCompare(b.subject)),
+              }))
+              .sort((a, b) => a.semester - b.semester),
+          };
+        })
+        .filter((s): s is StudentEntry => s !== null)
         .sort((a, b) => naturalCompare(a.studentUsername, b.studentUsername));
 
-    return [...groupBy(filteredGrades, (g) => g.specialty ?? UNKNOWN).entries()]
-      .map(([specialty, specialtyEntries]) => ({
-        specialty,
-        studentCount: new Set(specialtyEntries.map((g) => g.studentUsername)).size,
-        byGroup: [...groupBy(specialtyEntries, (g) => g.groupNumber ?? UNKNOWN).entries()]
+    return [...groupBy(filteredRoster, (r) => r.specialty ?? UNKNOWN).entries()]
+      .map(([specialty, specialtyEntries]) => {
+        const byGroup = [...groupBy(specialtyEntries, (r) => r.groupNumber ?? UNKNOWN).entries()]
           .map(([groupNumber, groupEntries]) => ({
             groupNumber,
             students: studentsOf(groupEntries),
           }))
-          .sort((a, b) => naturalCompare(a.groupNumber, b.groupNumber)),
-      }))
+          .filter((g) => g.students.length > 0)
+          .sort((a, b) => naturalCompare(a.groupNumber, b.groupNumber));
+        return {
+          specialty,
+          studentCount: byGroup.reduce((sum, g) => sum + g.students.length, 0),
+          byGroup,
+        };
+      })
+      .filter((s) => s.byGroup.length > 0)
       .sort((a, b) => naturalCompare(a.specialty, b.specialty));
-  }, [filteredGrades]);
+  }, [filteredRoster, gradesByStudent, subjectFilter, semesterFilter]);
 
   const singleStudent =
     bySpecialty.length === 1 && bySpecialty[0].byGroup.length === 1 && bySpecialty[0].byGroup[0].students.length === 1;
 
-  const startEditing = (g: TeacherGradeSummary) => {
-    setEditingId(g.id);
-    setEditSubject(g.subject);
-    setEditSemester(g.semester);
-    setEditGrade(g.grade);
-    setEditGradeType(g.gradeType);
-    setEditError(null);
-  };
-
-  const cancelEditing = () => {
-    setEditingId(null);
-    setEditError(null);
-  };
-
-  const handleSaveEdit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (editingId === null) return;
-    setEditError(null);
-    if (editSemester === '' || editGrade === '') {
-      setEditError('Моля, въведете семестър и оценка.');
-      return;
-    }
-    setEditSubmitting(true);
-    try {
-      await apiClient.put(`/teacher/grades/${editingId}`, {
-        subject: editSubject,
-        semester: editSemester,
-        grade: editGrade,
-        gradeType: editGradeType,
-      });
-      setEditingId(null);
-      reload();
-    } catch (err) {
-      setEditError(extractErrorMessage(err));
-    } finally {
-      setEditSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('Да се изтрие ли тази оценка?')) return;
-    setDeletingId(id);
-    try {
-      await apiClient.delete(`/teacher/grades/${id}`);
-      reload();
-    } catch (err) {
-      window.alert(extractErrorMessage(err));
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
   const startAdding = (studentUsername: string) => {
     setAddingFor(studentUsername);
-    setAddSubject('');
-    setAddSemester(1);
-    setAddGrade(6);
-    setAddGradeType('REGULAR');
-    setAddError(null);
+    addForm.reset();
   };
 
   const cancelAdding = () => {
     setAddingFor(null);
-    setAddError(null);
   };
 
   const handleAddGrade = async (event: FormEvent) => {
     event.preventDefault();
     if (addingFor === null) return;
-    setAddError(null);
-    if (addSemester === '' || addGrade === '') {
-      setAddError('Моля, въведете семестър и оценка.');
-      return;
-    }
-    setAddSubmitting(true);
-    try {
-      await apiClient.post('/teacher/grades', {
-        studentUsername: addingFor,
-        subject: addSubject,
-        semester: addSemester,
-        grade: addGrade,
-        gradeType: addGradeType,
-      });
-      setAddingFor(null);
-      reload();
-    } catch (err) {
-      setAddError(extractErrorMessage(err));
-    } finally {
-      setAddSubmitting(false);
-    }
+    const ok = await addForm.submit(addingFor);
+    if (ok) setAddingFor(null);
   };
 
   return (
@@ -291,9 +237,14 @@ export function StudentsPage() {
           <p className="error">{error}</p>
         </section>
       )}
-      {!loading && !error && filteredGrades.length === 0 && (
+      {editor.deleteError && (
         <section className="card">
-          <p>Няма оценки, отговарящи на филтъра.</p>
+          <p className="error">{editor.deleteError}</p>
+        </section>
+      )}
+      {!loading && !error && bySpecialty.length === 0 && (
+        <section className="card">
+          <p>Няма студенти, отговарящи на филтъра.</p>
         </section>
       )}
 
@@ -302,10 +253,10 @@ export function StudentsPage() {
           <summary>
             {specialty} <small style={{ opacity: 0.6 }}>({studentCount} студенти)</small>
           </summary>
-          {byGroup.map(({ groupNumber, students }) => (
+          {byGroup.map(({ groupNumber, students: groupStudents }) => (
             <details key={groupNumber} open={byGroup.length === 1}>
               <summary>Група {groupNumber}</summary>
-              {students.map(({ studentUsername, facultyNumber, bySemester }) => (
+              {groupStudents.map(({ studentUsername, facultyNumber, bySemester }) => (
                 <details key={studentUsername} open={singleStudent}>
                   <summary>
                     {studentUsername}
@@ -317,153 +268,90 @@ export function StudentsPage() {
                     </button>
                   </p>
                   {addingFor === studentUsername && (
-                    <form onSubmit={handleAddGrade} className="inline-form">
-                      <label>
-                        Предмет
-                        <select value={addSubject} onChange={(e) => setAddSubject(e.target.value)} required>
-                          <option value="" disabled>
-                            Изберете предмет
-                          </option>
-                          {subjects.map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Семестър
-                        <input
-                          type="number"
-                          min={1}
-                          max={8}
-                          value={addSemester}
-                          onChange={(e) => setAddSemester(e.target.value === '' ? '' : Number(e.target.value))}
-                          required
-                        />
-                      </label>
-                      <label>
-                        Оценка
-                        <input
-                          type="number"
-                          min={2}
-                          max={6}
-                          value={addGrade}
-                          onChange={(e) => setAddGrade(e.target.value === '' ? '' : Number(e.target.value))}
-                          required
-                        />
-                      </label>
-                      <label>
-                        Тип
-                        <select value={addGradeType} onChange={(e) => setAddGradeType(e.target.value as GradeType)}>
-                          {GRADE_TYPES.map((t) => (
-                            <option key={t} value={t}>
-                              {GRADE_TYPE_LABELS[t]}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button type="submit" disabled={addSubmitting}>
-                        {addSubmitting ? 'Записване...' : 'Запиши'}
-                      </button>
-                      <button type="button" onClick={cancelAdding}>
-                        Отказ
-                      </button>
-                    </form>
+                    <GradeFieldsForm
+                      onSubmit={handleAddGrade}
+                      subject={addForm.subject}
+                      onSubjectChange={addForm.setSubject}
+                      subjectOptions={subjects}
+                      datalistId="students-add-subjects"
+                      semester={addForm.semester}
+                      onSemesterChange={addForm.setSemester}
+                      grade={addForm.grade}
+                      onGradeChange={addForm.setGrade}
+                      gradeType={addForm.gradeType}
+                      onGradeTypeChange={addForm.setGradeType}
+                      submitting={addForm.submitting}
+                      submitLabel="Запиши"
+                      submittingLabel="Записване..."
+                      onCancel={cancelAdding}
+                    />
                   )}
-                  {addingFor === studentUsername && addError && <p className="error">{addError}</p>}
+                  {addingFor === studentUsername && addForm.error && <p className="error">{addForm.error}</p>}
+                  {bySemester.length === 0 && <p>Няма въведени оценки.</p>}
                   {bySemester.map(({ semester, subjectRows }) => (
                     <table key={semester}>
-              <thead>
-                <tr>
-                  <th colSpan={3}>Семестър {semester}</th>
-                </tr>
-                <tr>
-                  <th>Предмет</th>
-                  <th>Оценка</th>
-                  <th>Действие</th>
-                </tr>
-              </thead>
-              <tbody>
-                {subjectRows.flatMap(({ subject, entries }) =>
-                  entries.map((g) =>
-                    editingId === g.id ? (
-                      <tr key={g.id}>
-                        <td colSpan={3}>
-                          <form onSubmit={handleSaveEdit} className="inline-form">
-                            <label>
-                              Предмет
-                              <select value={editSubject} onChange={(e) => setEditSubject(e.target.value)} required>
-                                {subjects.map((s) => (
-                                  <option key={s} value={s}>
-                                    {s}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label>
-                              Семестър
-                              <input
-                                type="number"
-                                min={1}
-                                max={8}
-                                value={editSemester}
-                                onChange={(e) => setEditSemester(e.target.value === '' ? '' : Number(e.target.value))}
-                                required
-                              />
-                            </label>
-                            <label>
-                              Оценка
-                              <input
-                                type="number"
-                                min={2}
-                                max={6}
-                                value={editGrade}
-                                onChange={(e) => setEditGrade(e.target.value === '' ? '' : Number(e.target.value))}
-                                required
-                              />
-                            </label>
-                            <label>
-                              Тип
-                              <select value={editGradeType} onChange={(e) => setEditGradeType(e.target.value as GradeType)}>
-                                {GRADE_TYPES.map((t) => (
-                                  <option key={t} value={t}>
-                                    {GRADE_TYPE_LABELS[t]}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <button type="submit" disabled={editSubmitting}>
-                              {editSubmitting ? 'Записване...' : 'Запази'}
-                            </button>
-                            <button type="button" onClick={cancelEditing}>
-                              Отказ
-                            </button>
-                          </form>
-                          {editError && <p className="error">{editError}</p>}
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr key={g.id}>
-                        <td>{subject}</td>
-                        <td className={g.grade === FAIL_GRADE ? 'grade-btn-fail' : undefined}>
-                          {g.grade}
-                          <small style={{ opacity: 0.6 }}> ({GRADE_TYPE_LABELS[g.gradeType]})</small>
-                        </td>
-                        <td className="user-actions">
-                          <button type="button" onClick={() => startEditing(g)}>
-                            Редактирай
-                          </button>
-                          <button type="button" onClick={() => handleDelete(g.id)} disabled={deletingId === g.id}>
-                            {deletingId === g.id ? 'Изтриване...' : 'Изтрий'}
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  )
-                )}
-              </tbody>
-            </table>
+                      <thead>
+                        <tr>
+                          <th colSpan={3}>Семестър {semester}</th>
+                        </tr>
+                        <tr>
+                          <th>Предмет</th>
+                          <th>Оценка</th>
+                          <th>Действие</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {subjectRows.flatMap(({ subject, entries }) =>
+                          entries.map((g) =>
+                            editor.editingId === g.id ? (
+                              <tr key={g.id}>
+                                <td colSpan={3}>
+                                  <GradeFieldsForm
+                                    onSubmit={editor.handleSaveEdit}
+                                    subject={editor.editSubject}
+                                    onSubjectChange={editor.setEditSubject}
+                                    subjectOptions={subjects}
+                                    datalistId="students-edit-subjects"
+                                    semester={editor.editSemester}
+                                    onSemesterChange={editor.setEditSemester}
+                                    grade={editor.editGrade}
+                                    onGradeChange={editor.setEditGrade}
+                                    gradeType={editor.editGradeType}
+                                    onGradeTypeChange={editor.setEditGradeType}
+                                    submitting={editor.editSubmitting}
+                                    submitLabel="Запази"
+                                    submittingLabel="Записване..."
+                                    onCancel={editor.cancelEditing}
+                                  />
+                                  {editor.editError && <p className="error">{editor.editError}</p>}
+                                </td>
+                              </tr>
+                            ) : (
+                              <tr key={g.id}>
+                                <td>{subject}</td>
+                                <td className={g.grade === FAIL_GRADE ? 'grade-btn-fail' : undefined}>
+                                  {g.grade}
+                                  <small style={{ opacity: 0.6 }}> ({gradeTypeLabel(g.gradeType)})</small>
+                                </td>
+                                <td className="user-actions">
+                                  <button type="button" onClick={() => editor.startEditing(g)}>
+                                    Редактирай
+                                  </button>
+                                  <DeleteGradeButton
+                                    gradeId={g.id}
+                                    confirmingDeleteId={editor.confirmingDeleteId}
+                                    deletingId={editor.deletingId}
+                                    onRequestDelete={editor.requestDelete}
+                                    onCancelDelete={editor.cancelDelete}
+                                    onConfirmDelete={editor.confirmDelete}
+                                  />
+                                </td>
+                              </tr>
+                            )
+                          )
+                        )}
+                      </tbody>
+                    </table>
                   ))}
                 </details>
               ))}

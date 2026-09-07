@@ -14,6 +14,7 @@ import com.markly.backend.web.dto.UpsertStudentProfileRequest;
 import com.markly.backend.web.dto.UserResponse;
 import com.markly.backend.security.AppUserPrincipal;
 import jakarta.validation.Valid;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -139,7 +140,17 @@ public class AdminController {
         profile.setCompletedSemester(request.completedSemester());
         profile.setStream(request.stream());
 
-        return StudentProfileResponse.from(studentProfileRepository.save(profile), student.getUsername());
+        try {
+            return StudentProfileResponse.from(studentProfileRepository.save(profile), student.getUsername());
+        } catch (DataIntegrityViolationException ex) {
+            // The existsByFacultyNumberAndStudentNot check above closes most
+            // of the window, but two concurrent requests can both pass it
+            // before either commits — the unique index on faculty_number
+            // (V8) is what actually catches that race, and it fails as a
+            // generic constraint violation rather than the friendly message
+            // above. Same user-facing outcome either way: 400, not 500.
+            throw new IllegalArgumentException("Този факултетен номер вече принадлежи на друг ученик");
+        }
     }
 
     private User findStudent(String username) {
