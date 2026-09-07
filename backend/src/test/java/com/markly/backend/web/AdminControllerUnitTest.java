@@ -97,4 +97,28 @@ class AdminControllerUnitTest {
 
         assertSame(original, thrown);
     }
+
+    /**
+     * A hypothetical future index that merely starts with the same name
+     * (e.g. added alongside a new column) must not be mislabeled as the
+     * faculty-number violation — the same silent-mismatch failure mode a
+     * plain {@code String.contains} match would reintroduce.
+     */
+    @Test
+    void rethrowsAViolationOfAConstraintThatOnlySharesAPrefixInsteadOfMislabelingIt() {
+        User student = new User("student@uni-sofia.bg", "{noop}irrelevant", Role.STUDENT);
+        stubExistingStudentWithNoProfile(student);
+        ConstraintViolationException dbException = new ConstraintViolationException(
+                "duplicate key value violates unique constraint",
+                new SQLException("duplicate key"),
+                "idx_student_profiles_faculty_number_and_year");
+        DataIntegrityViolationException original =
+                new DataIntegrityViolationException("save failed", dbException);
+        when(studentProfileRepository.save(any(StudentProfile.class))).thenThrow(original);
+
+        DataIntegrityViolationException thrown = assertThrows(DataIntegrityViolationException.class,
+                () -> controller().upsertStudentProfile(request(student.getUsername(), "F12345")));
+
+        assertSame(original, thrown);
+    }
 }

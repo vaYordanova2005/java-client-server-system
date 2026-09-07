@@ -18,7 +18,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.Locale;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -52,6 +51,9 @@ class AdminStudentProfileTest {
 
     @Autowired
     private StudentProfileRepository studentProfileRepository;
+
+    @Autowired
+    private AdminController adminController;
 
     private User admin;
     private User studentUser;
@@ -195,11 +197,14 @@ class AdminStudentProfileTest {
      * schema-qualified and upper-cased as
      * {@code PUBLIC.IDX_STUDENT_PROFILES_FACULTY_NUMBER}, not the bare
      * {@code idx_student_profiles_faculty_number} a strict match expected —
-     * which would have silently fallen through to the generic 500. The
-     * assertion below mirrors the substring match {@code
-     * isFacultyNumberUniqueViolation} now uses, so this test locks in that
-     * whatever exact form a given driver reports, it still contains the
-     * index name.
+     * which would have silently fallen through to the generic 500.
+     *
+     * <p>The assertion calls {@link AdminController#isFacultyNumberUniqueViolation}
+     * itself on the real captured exception rather than re-deriving its
+     * matching rule as a separate expression here — the latter would keep
+     * passing even if that method's rule changed underneath it (e.g. to fix
+     * the false-positive risk of a plain substring match), silently stopping
+     * this test from proving anything about the actual code.
      */
     @Test
     void theRealDatabaseReportsAConstraintNameTheControllerCanMatch() {
@@ -214,10 +219,9 @@ class AdminStudentProfileTest {
                 () -> studentProfileRepository.saveAndFlush(second));
 
         assertInstanceOf(ConstraintViolationException.class, thrown.getCause());
-        String actualConstraintName = ((ConstraintViolationException) thrown.getCause()).getConstraintName();
-        assertTrue(actualConstraintName != null
-                        && actualConstraintName.toLowerCase(Locale.ROOT).contains("idx_student_profiles_faculty_number"),
-                "AdminController#isFacultyNumberUniqueViolation matches this literal as a substring against "
-                        + "whatever the driver actually reports; got '" + actualConstraintName + "'");
+        assertTrue(adminController.isFacultyNumberUniqueViolation(thrown),
+                "AdminController#isFacultyNumberUniqueViolation rejected the real exception the database just "
+                        + "threw; constraint name was '"
+                        + ((ConstraintViolationException) thrown.getCause()).getConstraintName() + "'");
     }
 }

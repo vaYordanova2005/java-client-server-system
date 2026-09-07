@@ -168,7 +168,9 @@ public class AdminController {
         }
     }
 
-    private boolean isFacultyNumberUniqueViolation(DataIntegrityViolationException ex) {
+    // Package-private (not private) so AdminStudentProfileTest can assert on this exact method
+    // against a real database exception instead of re-deriving the matching rule by hand.
+    boolean isFacultyNumberUniqueViolation(DataIntegrityViolationException ex) {
         // Spring's translator wraps the Hibernate exception one level deep
         // (DataIntegrityViolationException -> ConstraintViolationException ->
         // the driver's SQLException) — getCause(), not getMostSpecificCause(),
@@ -179,16 +181,24 @@ public class AdminController {
             return false;
         }
         String constraintName = constraintViolation.getConstraintName();
-        // Substring, not equality: real PostgreSQL reports the bare index
-        // name ("idx_student_profiles_faculty_number"), but other Hibernate
-        // dialects can schema-qualify and upper-case it (H2, used in tests,
-        // reports "PUBLIC.IDX_STUDENT_PROFILES_FACULTY_NUMBER"). An exact
-        // match missed that second form and fell through to the generic 500
-        // — caught by AdminStudentProfileTest#theRealDatabaseReportsTheConstraintNameTheControllerMatchesAgainst,
-        // which triggers the real index against the test database instead of
-        // a hand-built exception.
-        return constraintName != null
-                && constraintName.toLowerCase(Locale.ROOT).contains(FACULTY_NUMBER_UNIQUE_INDEX);
+        if (constraintName == null) {
+            return false;
+        }
+        // Equality, or a schema-qualified suffix — not a bare substring/contains:
+        // real PostgreSQL reports the bare index name
+        // ("idx_student_profiles_faculty_number"), but other Hibernate dialects
+        // can schema-qualify and upper-case it (H2, used in tests, reports
+        // "PUBLIC.IDX_STUDENT_PROFILES_FACULTY_NUMBER"). A plain `contains` would
+        // also match a future, unrelated index that merely starts with this name
+        // (e.g. idx_student_profiles_faculty_number_and_year) — the same kind of
+        // silent mislabeling this match exists to avoid, just moved one step
+        // over. Caught by
+        // AdminStudentProfileTest#theRealDatabaseReportsAConstraintNameTheControllerCanMatch,
+        // which triggers the real index against the test database instead of a
+        // hand-built exception.
+        String normalized = constraintName.toLowerCase(Locale.ROOT);
+        return normalized.equals(FACULTY_NUMBER_UNIQUE_INDEX)
+                || normalized.endsWith("." + FACULTY_NUMBER_UNIQUE_INDEX);
     }
 
     private User findStudent(String username) {
