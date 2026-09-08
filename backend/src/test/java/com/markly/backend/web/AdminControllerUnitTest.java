@@ -11,6 +11,7 @@ import com.markly.backend.repository.UserRepository;
 import com.markly.backend.security.ClientIpResolver;
 import com.markly.backend.service.AuditLogService;
 import com.markly.backend.service.StudentRosterService;
+import com.markly.backend.service.UserImportService;
 import com.markly.backend.service.UserValidationService;
 import com.markly.backend.web.dto.UpsertStudentProfileRequest;
 import org.hibernate.exception.ConstraintViolationException;
@@ -65,12 +66,14 @@ class AdminControllerUnitTest {
     private ClientIpResolver clientIpResolver;
     @Mock
     private CalendarEventRepository calendarEventRepository;
+    @Mock
+    private UserImportService userImportService;
 
     private AdminController controller() {
         return new AdminController(
                 userRepository, userValidationService, passwordEncoder, studentProfileRepository,
                 gradeRepository, studentRosterService, auditLogRepository, auditLogService, clientIpResolver,
-                calendarEventRepository);
+                calendarEventRepository, userImportService);
     }
 
     private UpsertStudentProfileRequest request(String username, String facultyNumber) {

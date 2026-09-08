@@ -4,7 +4,7 @@ import { Layout } from '../routes/Layout';
 import { useAuth } from '../auth/useAuth';
 import { useAuditLog, type AuditLogFilters } from '../hooks/useAuditLog';
 import { ConfirmDeleteButton } from '../components/ConfirmDeleteButton';
-import type { Role, StudentProfileSummary, UserSummary } from '../types';
+import type { ImportUsersResponse, Role, StudentProfileSummary, UserSummary } from '../types';
 
 type ProfileFormState = {
   degreeLevel: string;
@@ -208,6 +208,33 @@ export function AdminDashboard() {
     }
   };
 
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importResult, setImportResult] = useState<ImportUsersResponse | null>(null);
+  const [importSubmitting, setImportSubmitting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const handleImport = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!importFile) return;
+    setImportError(null);
+    setImportResult(null);
+    setImportSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', importFile);
+      // No manual Content-Type: the browser sets the multipart boundary
+      // itself when the body is a FormData instance.
+      const response = await apiClient.post<ImportUsersResponse>('/admin/users/import', formData);
+      setImportResult(response.data);
+      setImportFile(null);
+      reloadUsers();
+    } catch (err) {
+      setImportError(extractErrorMessage(err));
+    } finally {
+      setImportSubmitting(false);
+    }
+  };
+
   const handleLoadProfile = async (event: FormEvent) => {
     event.preventDefault();
     setProfileError(null);
@@ -295,6 +322,57 @@ export function AdminDashboard() {
           </button>
         </form>
         {error && <p className="error">{error}</p>}
+      </section>
+
+      <section className="card">
+        <h2>Импорт на потребители от CSV</h2>
+        <p>Колони: <code>role,username,password</code> (role е STUDENT или TEACHER).</p>
+        <form onSubmit={handleImport} className="inline-form">
+          <label>
+            Файл
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+              required
+            />
+          </label>
+          <button type="submit" disabled={importSubmitting || !importFile}>
+            {importSubmitting ? 'Качване...' : 'Импортирай'}
+          </button>
+        </form>
+        {importError && <p className="error">{importError}</p>}
+        {importResult && (
+          <>
+            <p className="success">
+              Създадени: {importResult.created}, пропуснати: {importResult.skipped}
+            </p>
+            {importResult.results.length > 0 && (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ред</th>
+                    <th>Потребител</th>
+                    <th>Резултат</th>
+                    <th>Съобщение</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importResult.results.map((r) => (
+                    <tr key={r.rowNumber}>
+                      <td>{r.rowNumber}</td>
+                      <td>{r.username}</td>
+                      <td className={r.status === 'SKIPPED' ? 'error' : 'success'}>
+                        {r.status === 'CREATED' ? 'Създаден' : 'Пропуснат'}
+                      </td>
+                      <td>{r.message ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
+        )}
       </section>
 
       <section className="card">

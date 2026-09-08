@@ -130,6 +130,19 @@ export interface PageResponse<T> {
   totalPages: number;
 }
 
+export interface ImportUserRowResult {
+  rowNumber: number;
+  username: string;
+  status: 'CREATED' | 'SKIPPED';
+  message: string | null;
+}
+
+export interface ImportUsersResponse {
+  results: ImportUserRowResult[];
+  created: number;
+  skipped: number;
+}
+
 export interface StudentProfileSummary {
   studentUsername: string;
   degreeLevel: string | null;

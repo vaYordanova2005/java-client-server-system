@@ -13,11 +13,13 @@ import com.markly.backend.security.ClientIpResolver;
 import com.markly.backend.service.AuditLogService;
 import com.markly.backend.service.StudentProfileNormalizer;
 import com.markly.backend.service.StudentRosterService;
+import com.markly.backend.service.UserImportService;
 import com.markly.backend.service.UserValidationService;
 import com.markly.backend.web.dto.AdminGradeResponse;
 import com.markly.backend.web.dto.AdminResetPasswordRequest;
 import com.markly.backend.web.dto.AuditLogResponse;
 import com.markly.backend.web.dto.CreateUserRequest;
+import com.markly.backend.web.dto.ImportUsersResponse;
 import com.markly.backend.web.dto.PageResponse;
 import com.markly.backend.web.dto.StudentProfileResponse;
 import com.markly.backend.web.dto.StudentRosterResponse;
@@ -35,8 +37,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -60,6 +64,7 @@ public class AdminController {
     private final AuditLogService auditLogService;
     private final ClientIpResolver clientIpResolver;
     private final CalendarEventRepository calendarEventRepository;
+    private final UserImportService userImportService;
 
     public AdminController(
             UserRepository userRepository,
@@ -71,7 +76,8 @@ public class AdminController {
             AuditLogRepository auditLogRepository,
             AuditLogService auditLogService,
             ClientIpResolver clientIpResolver,
-            CalendarEventRepository calendarEventRepository) {
+            CalendarEventRepository calendarEventRepository,
+            UserImportService userImportService) {
         this.userRepository = userRepository;
         this.userValidationService = userValidationService;
         this.passwordEncoder = passwordEncoder;
@@ -82,6 +88,7 @@ public class AdminController {
         this.auditLogService = auditLogService;
         this.clientIpResolver = clientIpResolver;
         this.calendarEventRepository = calendarEventRepository;
+        this.userImportService = userImportService;
     }
 
     @GetMapping("/users")
@@ -103,6 +110,27 @@ public class AdminController {
 
         User user = new User(request.username(), passwordEncoder.encode(request.password()), role);
         return UserResponse.from(userRepository.save(user));
+    }
+
+    /**
+     * Bulk counterpart to {@link #createUser}: one row per account
+     * ({@code role,username,password}), each validated and saved
+     * independently so a typo in one row doesn't lose the rest of a large
+     * import. See {@link UserImportService} for the CSV-parsing details
+     * (header matching, BOM handling).
+     */
+    @PostMapping("/users/import")
+    public ImportUsersResponse importUsers(
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal AppUserPrincipal currentAdmin,
+            HttpServletRequest httpRequest) throws IOException {
+        ImportUsersResponse response = userImportService.importUsers(file.getInputStream());
+        // Never row contents, usernames, or the uploaded filename — only the
+        // aggregate counts, since the file is user-supplied and may contain
+        // plaintext passwords.
+        auditLogService.record("USERS_IMPORTED", currentAdmin.getUsername(), null,
+                clientIpResolver.resolve(httpRequest), "created=" + response.created() + " skipped=" + response.skipped());
+        return response;
     }
 
     /**
