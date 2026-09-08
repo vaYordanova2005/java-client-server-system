@@ -50,6 +50,10 @@ public class User {
     @Column(nullable = false)
     private int tokenVersion = 0;
 
+    /** Set only by {@code RestrictedDemoAccountSeeder}; every write is blocked for such an account. */
+    @Column(name = "is_demo", nullable = false)
+    private boolean demo = false;
+
     public User(String username, String password, Role role) {
         this.username = username;
         this.password = password;

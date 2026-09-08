@@ -112,6 +112,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        // A demo account may read everything its role can, but nothing it does may
+        // persist; logout is a POST too but isn't a data mutation, so it stays allowed.
+        if (principal.getUser().isDemo()
+                && !SAFE_METHODS.contains(request.getMethod())
+                && !request.getRequestURI().endsWith("/api/auth/logout")) {
+            reject(response, HttpServletResponse.SC_FORBIDDEN,
+                    "Това е демо акаунт — само преглед, действието не е разрешено.");
+            return;
+        }
+
         var authToken = new UsernamePasswordAuthenticationToken(
                 principal, null, principal.getAuthorities());
         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));

@@ -3,6 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { extractErrorMessage } from '../api/client';
 
+// Always-seeded restricted demo accounts (see RestrictedDemoAccountSeeder /
+// README "Restricted demo accounts") — the password is public by design,
+// nothing here is a secret.
+const DEMO_PASSWORD = 'password12345';
+const DEMO_ACCOUNTS = [
+  { label: 'Демо учител', username: 'teacher@uni-sofia.bg' },
+  { label: 'Демо ученик', username: 'student@uni-sofia.bg' },
+] as const;
+
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -13,18 +22,22 @@ export function LoginPage() {
   const [showForgotHint, setShowForgotHint] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
+  const signIn = async (loginUsername: string, loginPassword: string) => {
     setError(null);
     setSubmitting(true);
     try {
-      const user = await login(username, password);
+      const user = await login(loginUsername, loginPassword);
       navigate(`/${user.role.toLowerCase()}`, { replace: true });
     } catch (err) {
       setError(extractErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    void signIn(username, password);
   };
 
   return (
@@ -116,6 +129,22 @@ export function LoginPage() {
         <button type="submit" className="login-btn" disabled={submitting}>
           {submitting ? 'Вход...' : 'Вход'}
         </button>
+        <div className="login-demo-divider">
+          <span>или вижте демо</span>
+        </div>
+        <div className="login-demo-buttons">
+          {DEMO_ACCOUNTS.map((account) => (
+            <button
+              key={account.username}
+              type="button"
+              className="login-demo-btn"
+              disabled={submitting}
+              onClick={() => void signIn(account.username, DEMO_PASSWORD)}
+            >
+              {account.label}
+            </button>
+          ))}
+        </div>
       </form>
     </div>
   );

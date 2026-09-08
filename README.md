@@ -71,14 +71,38 @@ different host than the API (as on Render), set `AUTH_COOKIE_SECURE=true` and
 `AUTH_COOKIE_SAME_SITE=None`, or the browser will drop the cookie; the defaults
 (`false`/`Lax`) are for running both on localhost.
 
-#### Demo data (optional)
+#### Restricted demo accounts (always on)
+
+Every startup, in every environment including production, seeds exactly two accounts for
+letting anyone try the live app without touching real data:
+
+* `teacher@uni-sofia.bg` / `password12345`
+* `student@uni-sofia.bg` / `password12345`
+
+The login page also has a one-click button for each, so nobody actually needs to type
+either credential in by hand.
+
+Both can read everything their role normally sees, but every write (add a grade, change
+password, create a user, etc.) is rejected with *"Това е демо акаунт — само преглед,
+действието не е разрешено."* instead of applying. The demo teacher's reads are also scoped:
+the student roster and lookup endpoints only ever show the one demo student, never the real
+roster — the password above is public, so nothing reachable through it can leak real
+student data. (The calendar is the one exception — it's institutional data, not student
+PII, so it's shown unfiltered.) Deactivating either account from the admin panel does not
+stick — the seeder re-enables it on the next restart, since "always available" is the
+point; hard-deleting either is blocked outright once it has grade history, same as any
+other account. There is no demo admin, by design — the only admin account is the one
+created via `SEED_ADMIN_USERNAME`/`SEED_ADMIN_PASSWORD` below.
+
+#### Bulk demo data (optional)
 
 With `SEED_DEMO_DATA=true`, the first startup against an empty database creates 8
 teachers, 20 students (each with a registrar profile and grades across every semester up
 to and including the one they're currently enrolled in), and a handful of calendar
 events, so there's something to look at on every page. Disabled by default — only enable
-it on a local/test database, never against a live production database. Demo credentials
-(valid under the same rules as manually created accounts):
+it on a local/test database, never against a live production database. These accounts are
+*not* restricted (they're regular accounts pre-seeded with data), unlike the two above.
+Demo credentials (valid under the same rules as manually created accounts):
 
 * Teachers: `teacher1@uni-sofia.bg` … `teacher8@uni-sofia.bg`, password `password12345`
 * Students: `student1@uni-sofia.bg` … `student20@uni-sofia.bg`, password `password12345`

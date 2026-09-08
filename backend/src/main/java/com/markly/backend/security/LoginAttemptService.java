@@ -45,6 +45,15 @@ public class LoginAttemptService {
             return;
         }
 
+        if (user.isDemo()) {
+            // The demo password is public by design (see README), so counting
+            // failures here would let anyone lock the account for every other
+            // visitor. The per-IP limit in LoginRateLimitFilter still applies.
+            auditLogService.record("LOGIN_FAILURE", user.getUsername(), null, clientIp,
+                    "reason=" + reason + " (demo account, not counted toward lockout)");
+            return;
+        }
+
         int attempts = user.getFailedLoginAttempts() + 1;
         user.setFailedLoginAttempts(attempts);
         if (attempts >= MAX_FAILED_ATTEMPTS) {

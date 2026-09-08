@@ -57,13 +57,24 @@ public class TeacherController {
      * grades are still recorded against the resolved account's email
      * ({@link #addGrade}), so the account identifier stays the email, per
      * documentation/decisions.md.
+     *
+     * <p>A demo teacher must not be able to pull a real student's name/faculty
+     * number through this lookup — the password is public by design, so
+     * anyone could otherwise use it to harvest the real roster. Scoped to
+     * {@code isDemo()} only; a real teacher's lookup is unchanged. Still 404,
+     * not 403, when a real student is found but hidden from a demo caller —
+     * same reasoning as {@code findOwnGrade}'s 404 choice below: the response
+     * must not confirm the student exists.
      */
     @GetMapping("/students/lookup")
-    public StudentLookupResponse lookupStudent(@RequestParam String query) {
+    public StudentLookupResponse lookupStudent(
+            @RequestParam String query, @AuthenticationPrincipal AppUserPrincipal principal) {
+        boolean demoCaller = principal.getUser().isDemo();
         String normalized = StudentProfileNormalizer.normalizeFacultyNumber(query);
         if (normalized != null) {
             var byFacultyNumber = studentProfileRepository.findByFacultyNumber(normalized);
-            if (byFacultyNumber.isPresent()) {
+            if (byFacultyNumber.isPresent()
+                    && (!demoCaller || byFacultyNumber.get().getStudent().isDemo())) {
                 StudentProfile profile = byFacultyNumber.get();
                 return StudentLookupResponse.from(profile, profile.getStudent().getUsername());
             }
@@ -71,6 +82,7 @@ public class TeacherController {
 
         User student = userRepository.findByUsernameIgnoreCase(query.trim())
                 .filter(u -> u.getRole() == Role.STUDENT)
+                .filter(u -> !demoCaller || u.isDemo())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Няма ученик с такъв факултетен номер или имейл"));
         return studentProfileRepository.findByStudent(student)
                 .map(profile -> StudentLookupResponse.from(profile, student.getUsername()))
@@ -98,10 +110,17 @@ public class TeacherController {
      * pagination and/or a teacher-group mapping to filter by, not a
      * band-aid on this method. Shared with the admin roster
      * ({@code AdminController}) via {@link StudentRosterService}.
+     *
+     * <p>The one exception to "the whole directory": a demo teacher gets
+     * {@link StudentRosterService#demoStudents()} instead — real students'
+     * names and faculty numbers must never be reachable through a public
+     * demo password.
      */
     @GetMapping("/students")
-    public List<StudentRosterResponse> allStudents() {
-        return studentRosterService.allStudents();
+    public List<StudentRosterResponse> allStudents(@AuthenticationPrincipal AppUserPrincipal principal) {
+        return principal.getUser().isDemo()
+                ? studentRosterService.demoStudents()
+                : studentRosterService.allStudents();
     }
 
     /**
