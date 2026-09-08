@@ -3,6 +3,7 @@ package com.markly.backend.config;
 import com.markly.backend.domain.CalendarEvent;
 import com.markly.backend.domain.CalendarEventType;
 import com.markly.backend.domain.Grade;
+import com.markly.backend.domain.GradeType;
 import com.markly.backend.domain.Role;
 import com.markly.backend.domain.StudentProfile;
 import com.markly.backend.domain.User;
@@ -10,6 +11,8 @@ import com.markly.backend.repository.CalendarEventRepository;
 import com.markly.backend.repository.GradeRepository;
 import com.markly.backend.repository.StudentProfileRepository;
 import com.markly.backend.repository.UserRepository;
+import com.markly.backend.service.StudentProfileNormalizer;
+import com.markly.backend.service.UserValidationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,18 +31,23 @@ import java.util.Random;
  * Seeds 8 teachers, 8 subjects, 20 students, and a spread of grades so the
  * dashboards have real data to render. Disabled by default — opt in with
  * {@code SEED_DEMO_DATA=true}. Skips itself once the first demo teacher
- * already exists, so it only ever runs once per database. Usernames/passwords
- * are generated to satisfy {@link com.markly.backend.service.UserValidationService}
- * so demo accounts behave exactly like admin-created ones; see README for the
- * shared demo credentials.
+ * already exists, so it only ever runs once per database. Each generated
+ * username/password pair is run through {@link
+ * com.markly.backend.service.UserValidationService#validateDemoPassword}
+ * before the account is created — the demo password is fixed by project
+ * decision and exempt from the character-class rule, but not from the
+ * length, common-password, or username-substring checks, so a change to
+ * {@link #DEMO_TEACHER_PASSWORD}/{@link #DEMO_STUDENT_PASSWORD} that made it
+ * actually weak fails the seed instead of silently creating accounts with
+ * it; see README for the shared demo credentials.
  */
 @Component
 public class DemoDataSeeder implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DemoDataSeeder.class);
 
-    static final String DEMO_TEACHER_PASSWORD = "Demo-Markly2024";
-    static final String DEMO_STUDENT_PASSWORD = "Demo-Markly2024";
+    static final String DEMO_TEACHER_PASSWORD = "password12345";
+    static final String DEMO_STUDENT_PASSWORD = "password12345";
 
     private static final int TEACHER_COUNT = 8;
     private static final int STUDENT_COUNT = 20;
@@ -96,6 +104,7 @@ public class DemoDataSeeder implements CommandLineRunner {
     private final CalendarEventRepository calendarEventRepository;
     private final StudentProfileRepository studentProfileRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserValidationService userValidationService;
     private final boolean enabled;
 
     public DemoDataSeeder(
@@ -104,12 +113,14 @@ public class DemoDataSeeder implements CommandLineRunner {
             CalendarEventRepository calendarEventRepository,
             StudentProfileRepository studentProfileRepository,
             PasswordEncoder passwordEncoder,
+            UserValidationService userValidationService,
             @Value("${app.seed-demo-data.enabled:false}") boolean enabled) {
         this.userRepository = userRepository;
         this.gradeRepository = gradeRepository;
         this.calendarEventRepository = calendarEventRepository;
         this.studentProfileRepository = studentProfileRepository;
         this.passwordEncoder = passwordEncoder;
+        this.userValidationService = userValidationService;
         this.enabled = enabled;
     }
 
@@ -121,14 +132,18 @@ public class DemoDataSeeder implements CommandLineRunner {
         }
 
         List<User> teachers = TEACHER_HANDLES.stream()
-                .map(handle -> userRepository.save(
-                        new User(handle + "@uni-sofia.bg", passwordEncoder.encode(DEMO_TEACHER_PASSWORD), Role.TEACHER)))
+                .map(handle -> handle + "@uni-sofia.bg")
+                .map(username -> {
+                    userValidationService.validateDemoPassword(username, DEMO_TEACHER_PASSWORD);
+                    return userRepository.save(new User(username, passwordEncoder.encode(DEMO_TEACHER_PASSWORD), Role.TEACHER));
+                })
                 .toList();
 
         Random random = new Random(RANDOM_SEED);
         int gradeCount = 0;
         for (int i = 1; i <= STUDENT_COUNT; i++) {
             String username = "student" + i + "@uni-sofia.bg";
+            userValidationService.validateDemoPassword(username, DEMO_STUDENT_PASSWORD);
             User student = userRepository.save(
                     new User(username, passwordEncoder.encode(DEMO_STUDENT_PASSWORD), Role.STUDENT));
             int enrolledSemester = 1 + random.nextInt(8);
@@ -145,7 +160,8 @@ public class DemoDataSeeder implements CommandLineRunner {
                     User teacher = teachers.get(subjectIndex % teachers.size());
 
                     int grade = weightedGrade(random);
-                    saveGrade(student, teacher, subject, enrolledSemester, semester, grade, REGULAR_LEAD_DAYS_BASE - k);
+                    saveGrade(student, teacher, subject, enrolledSemester, semester, grade,
+                            REGULAR_LEAD_DAYS_BASE - k, GradeType.REGULAR);
                     gradeCount++;
 
                     // A failing grade is always retaken; a few passing ones are
@@ -153,7 +169,7 @@ public class DemoDataSeeder implements CommandLineRunner {
                     // something to compare.
                     if (grade == FAIL_GRADE || random.nextInt(100) < EXTRA_RETAKE_PERCENT) {
                         saveGrade(student, teacher, subject, enrolledSemester, semester,
-                                retakeGrade(random), RETAKE_LEAD_DAYS);
+                                retakeGrade(random), RETAKE_LEAD_DAYS, GradeType.RETAKE);
                         gradeCount++;
                     }
                 }
@@ -183,8 +199,8 @@ public class DemoDataSeeder implements CommandLineRunner {
      */
     private void saveGrade(
             User student, User teacher, String subject,
-            int enrolledSemester, int semester, int grade, int daysBeforeSessionEnd) {
-        Grade entity = new Grade(student, teacher, subject, semester, grade);
+            int enrolledSemester, int semester, int grade, int daysBeforeSessionEnd, GradeType gradeType) {
+        Grade entity = new Grade(student, teacher, subject, semester, grade, gradeType);
         entity.setCreatedAt(sessionInstant(enrolledSemester, semester, daysBeforeSessionEnd));
         gradeRepository.save(entity);
     }
@@ -238,11 +254,19 @@ public class DemoDataSeeder implements CommandLineRunner {
      * Fictional registrar-style info (faculty number, group, semester
      * status, etc.) so the profile page isn't empty on a fresh demo
      * database. Values are generated, not copied from any real record.
+     *
+     * <p>{@code index} (1..{@link #STUDENT_COUNT}) makes the faculty number
+     * unique and deterministic across the whole seed, which is what lets
+     * {@code student_profiles.faculty_number}'s unique index (see V8) accept
+     * it without collisions; run through {@link StudentProfileNormalizer}
+     * anyway so this stays byte-for-byte what every other writer of the
+     * column would produce, even though a digits-only value is already a
+     * no-op under trim/uppercase.
      */
     private StudentProfile seedStudentProfile(User student, int index, int enrolledSemester) {
         StudentProfile profile = new StudentProfile(student);
         profile.setDegreeLevel("Бакалавър");
-        profile.setFacultyNumber(String.format("12%04d", 1000 + index));
+        profile.setFacultyNumber(StudentProfileNormalizer.normalizeFacultyNumber(String.format("12%04d", 1000 + index)));
         profile.setFaculty(FACULTIES.get(0));
         profile.setSpecialty(SPECIALTIES.get(0));
         profile.setStudyMode("редовно");

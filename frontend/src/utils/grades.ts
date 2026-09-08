@@ -1,11 +1,20 @@
-import type { GradeSummary } from '../types';
+import type { GradeSummary, GradeType } from '../types';
 
 export const TOP_GRADE = 6;
 export const FAIL_GRADE = 2;
 const EXCELLENT_THRESHOLD = 5.5;
 const GOOD_THRESHOLD = 4.5;
 
-export function average(values: number[]): number {
+/**
+ * `null` for an empty input rather than `0` — a 0 renders identically to a
+ * genuine average of 0 (and `tierColor(0)` would paint it red as if it were
+ * a real, terrible average), silently lying about there being data at all.
+ * Every current caller already guards with a `.length` check before calling
+ * this, so `null` never actually reaches them; it exists for the next
+ * caller that doesn't.
+ */
+export function average(values: number[]): number | null {
+  if (values.length === 0) return null;
   return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
@@ -38,6 +47,19 @@ export function groupBy<T, K>(items: T[], key: (item: T) => K): Map<K, T[]> {
   return groups;
 }
 
+/**
+ * `localeCompare` alone orders `student10` before `student2`, since it
+ * compares the digits character by character. The numeric collator compares
+ * runs of digits as numbers, so `student2 < student10` — the order a teacher
+ * scanning a roster expects. Also used for group numbers, which are short
+ * numeric strings for the same reason.
+ */
+const collator = new Intl.Collator('bg', { numeric: true, sensitivity: 'base' });
+
+export function naturalCompare(a: string, b: string): number {
+  return collator.compare(a, b);
+}
+
 export interface SubjectAverage {
   subject: string;
   avg: number;
@@ -50,23 +72,34 @@ export interface SemesterAverage {
   count: number;
 }
 
-/** Best first — every caller so far ranks subjects by success. */
-export function subjectAverages(grades: GradeSummary[]): SubjectAverage[] {
+/**
+ * Best first — every caller so far ranks subjects by success. Generic over
+ * `{ subject, grade }` (not just {@link GradeSummary}) so a teacher's
+ * `TeacherGradeSummary[]` — which spans many students but shares the same
+ * subject/grade fields — can reuse this without a parallel copy.
+ */
+export function subjectAverages<T extends { subject: string; grade: number }>(grades: T[]): SubjectAverage[] {
   return [...groupBy(grades, (g) => g.subject).entries()]
     .map(([subject, entries]) => ({
       subject,
-      avg: average(entries.map((g) => g.grade)),
+      // groupBy only ever creates a bucket by pushing to it, so `entries` is
+      // never empty here — average() only returns null for `[]`.
+      avg: average(entries.map((g) => g.grade))!,
       count: entries.length,
     }))
     .sort((a, b) => b.avg - a.avg);
 }
 
-/** Chronological — these feed trend lines, which have to read left to right. */
-export function semesterAverages(grades: GradeSummary[]): SemesterAverage[] {
+/**
+ * Chronological — these feed trend lines, which have to read left to right.
+ * Generic for the same reason as {@link subjectAverages}.
+ */
+export function semesterAverages<T extends { semester: number; grade: number }>(grades: T[]): SemesterAverage[] {
   return [...groupBy(grades, (g) => g.semester).entries()]
     .map(([semester, entries]) => ({
       semester,
-      avg: average(entries.map((g) => g.grade)),
+      // Same reasoning as subjectAverages above: entries is never empty.
+      avg: average(entries.map((g) => g.grade))!,
       count: entries.length,
     }))
     .sort((a, b) => a.semester - b.semester);
@@ -88,18 +121,22 @@ export function byCreatedAt(a: Recorded, b: Recorded): number {
   return diff !== 0 ? diff : a.id - b.id;
 }
 
-export type SessionType = 'regular' | 'retake';
+export const GRADE_TYPES: GradeType[] = ['TEST', 'ORAL_EXAM', 'CLASS_TEST', 'REGULAR', 'RETAKE'];
 
-// No real "session type" field in the data yet: only one grade per
-// semester+subject can be the regular session — whichever was recorded
-// first — and every later grade for that same semester+subject is a retake
-// ("поправителна сесия"), regardless of its value.
-export function classifySessionTypes(grades: GradeSummary[]): Map<number, SessionType> {
-  const result = new Map<number, SessionType>();
-  for (const bucket of groupBy(grades, (g) => `${g.semester}::${g.subject}`).values()) {
-    [...bucket]
-      .sort(byCreatedAt)
-      .forEach((g, index) => result.set(g.id, index === 0 ? 'regular' : 'retake'));
-  }
-  return result;
+export const GRADE_TYPE_LABELS: Record<GradeType, string> = {
+  TEST: 'Тест',
+  ORAL_EXAM: 'Устно изпитване',
+  CLASS_TEST: 'Контролна работа',
+  REGULAR: 'Редовна сесия',
+  RETAKE: 'Поправителна сесия',
+};
+
+/**
+ * {@link GRADE_TYPE_LABELS} is indexed by every caller directly, which
+ * renders the literal string `undefined` for a type the map doesn't know
+ * about — legacy data or a value added on the backend before the frontend
+ * catches up. This falls back to a dash instead.
+ */
+export function gradeTypeLabel(type: GradeType | null | undefined): string {
+  return (type && GRADE_TYPE_LABELS[type]) || '—';
 }

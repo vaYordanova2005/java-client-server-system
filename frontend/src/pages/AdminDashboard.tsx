@@ -200,7 +200,7 @@ export function AdminDashboard() {
           <label>
             Роля
             <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-              <option value="STUDENT">Ученик</option>
+              <option value="STUDENT">Студент</option>
               <option value="TEACHER">Учител</option>
             </select>
           </label>
@@ -230,10 +230,10 @@ export function AdminDashboard() {
       </section>
 
       <section className="card">
-        <h2>Профил на ученик</h2>
+        <h2>Профил на студент</h2>
         <form onSubmit={handleLoadProfile} className="inline-form">
           <label>
-            Имейл на ученика
+            Имейл на студента
             <input
               type="email"
               value={profileUsername}

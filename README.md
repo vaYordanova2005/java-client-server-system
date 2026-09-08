@@ -80,8 +80,8 @@ events, so there's something to look at on every page. Disabled by default — o
 it on a local/test database, never against a live production database. Demo credentials
 (valid under the same rules as manually created accounts):
 
-* Teachers: `teacher1@uni-sofia.bg` … `teacher8@uni-sofia.bg`, password `Demo-Markly2024`
-* Students: `student1@uni-sofia.bg` … `student20@uni-sofia.bg`, password `Demo-Markly2024`
+* Teachers: `teacher1@uni-sofia.bg` … `teacher8@uni-sofia.bg`, password `password12345`
+* Students: `student1@uni-sofia.bg` … `student20@uni-sofia.bg`, password `password12345`
 
 For a remote database (e.g. [Neon](https://neon.tech)), set `DB_HOST` to the host from
 the connection string and `DB_SSLMODE=require`:

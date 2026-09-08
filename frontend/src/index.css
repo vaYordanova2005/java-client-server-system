@@ -172,6 +172,19 @@ main {
   margin-top: 0;
 }
 
+.card-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.card-link {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  color: var(--primary);
+}
+
 details.card {
   padding: 0;
   overflow: hidden;
@@ -207,6 +220,13 @@ details.card table {
 details.card p {
   margin: 0 1.5rem 1.5rem;
   opacity: 0.75;
+}
+
+/* A form nested inside an inner <details> (e.g. the per-student "add grade"
+   form) sits directly under it with no ancestor padding of its own, unlike
+   .card's own padding or a table cell's — without this it runs edge-to-edge. */
+details.card details form {
+  margin: 0 1.5rem 1.5rem;
 }
 
 .grade-btn {
@@ -853,6 +873,14 @@ a.stat-tile:hover {
 .calendar-delete-btn:not(:disabled):hover {
   background: var(--error);
   color: white;
+}
+
+.calendar-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .calendar-month-year {

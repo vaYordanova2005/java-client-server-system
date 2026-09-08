@@ -58,21 +58,60 @@ public class UserValidationService {
      * in than a weak student one.
      */
     public void validatePassword(String username, String password) {
+        checkLength(password);
+        checkCharacterClasses(password);
+        checkNoWhitespace(password);
+        checkNotCommon(password);
+        checkDoesNotContainUsername(username, password);
+    }
+
+    /**
+     * Narrower than {@link #validatePassword}: every demo/seed account (see
+     * {@code DemoDataSeeder}) is created outside the admin panel and shares
+     * one intentionally simple password by explicit project decision
+     * ({@code documentation/decisions.md}, "Passwords": "All accounts ... use
+     * the same password: password12345. No exceptions."), which does not
+     * satisfy the character-class rule below — that rule is what an
+     * admin-panel-created account is held to, not what a fixed demo constant
+     * is. Length, the common-password blocklist, and the username-substring
+     * check still apply: those guard against a value that's actually too
+     * weak or guessable, which the decision was never asking for.
+     */
+    public void validateDemoPassword(String username, String password) {
+        checkLength(password);
+        checkNoWhitespace(password);
+        checkNotCommon(password);
+        checkDoesNotContainUsername(username, password);
+    }
+
+    private void checkLength(String password) {
         if (password == null || password.length() < MIN_PASSWORD_LENGTH) {
             throw new IllegalArgumentException("Паролата трябва да е поне " + MIN_PASSWORD_LENGTH + " символа");
         }
+    }
+
+    private void checkCharacterClasses(String password) {
         if (password.chars().noneMatch(Character::isUpperCase)
                 || password.chars().noneMatch(Character::isLowerCase)
                 || password.chars().noneMatch(Character::isDigit)) {
             throw new IllegalArgumentException(
                     "Паролата трябва да съдържа поне една главна буква, една малка буква и една цифра");
         }
+    }
+
+    private void checkNoWhitespace(String password) {
         if (password.chars().anyMatch(Character::isWhitespace)) {
             throw new IllegalArgumentException("Паролата не трябва да съдържа интервали");
         }
+    }
+
+    private void checkNotCommon(String password) {
         if (COMMON_PASSWORDS.contains(password.toLowerCase())) {
             throw new IllegalArgumentException("Тази парола е твърде често използвана");
         }
+    }
+
+    private void checkDoesNotContainUsername(String username, String password) {
         // The local part of the email is public knowledge, so a password built
         // out of it is the first thing an attacker tries.
         String localPart = username == null ? "" : username.split("@")[0].toLowerCase();

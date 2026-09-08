@@ -10,7 +10,8 @@ export function StudentDashboard() {
 
   const stats = useMemo(() => {
     if (grades.length === 0) return null;
-    const overallAvg = average(grades.map((g) => g.grade));
+    // grades.length > 0 here, so this can never be the empty-input case.
+    const overallAvg = average(grades.map((g) => g.grade))!;
     const excellentCount = grades.filter((g) => g.grade >= TOP_GRADE).length;
     const subjects = new Set(grades.map((g) => g.subject));
 

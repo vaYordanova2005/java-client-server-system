@@ -6,8 +6,13 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
-public record CreateGradeRequest(
-        @NotBlank(message = "Имейлът на ученика е задължителен") String studentUsername,
+/**
+ * Deliberately has no {@code studentUsername} field: a correction can change
+ * what was recorded (subject, semester, grade, type) but never who it was
+ * recorded for — reassigning a grade to a different student is a
+ * delete-and-recreate, not an edit.
+ */
+public record UpdateGradeRequest(
         @NotBlank(message = "Предметът е задължителен") String subject,
         @Min(value = 1, message = "Семестърът трябва да е между 1 и 8")
         @Max(value = 8, message = "Семестърът трябва да е между 1 и 8") int semester,

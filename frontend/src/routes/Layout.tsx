@@ -1,26 +1,27 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
-import { HomeIcon, JournalIcon, ChartIcon, CalendarIcon } from '../components/icons';
+import { HomeIcon, JournalIcon, ChartIcon, CalendarIcon, StudentsIcon } from '../components/icons';
 import { NetworkField } from '../components/NetworkField';
+import type { Role } from '../types';
+
+// Дневник and Статистики render real data for STUDENT (own grades) and
+// TEACHER (own-entered grades); ADMIN still gets "в процес на разработка" on
+// those routes, so the nav doesn't offer them there.
+const ROLES_WITH_JOURNAL_AND_STATISTICS: Role[] = ['STUDENT', 'TEACHER'];
 
 export function Layout({ title, children }: { title?: string; children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const homePath = user ? `/${user.role.toLowerCase()}` : '/';
-  // Дневник and Статистики only ever show a student's own grades; for a
-  // teacher or an admin they answer "в процес на разработка", so they are not
-  // offered in the navigation of those roles.
-  const isStudent = user?.role === 'STUDENT';
+  const showJournalAndStatistics = !!user && ROLES_WITH_JOURNAL_AND_STATISTICS.includes(user.role);
+  const showStudents = user?.role === 'TEACHER';
   const navItems = [
     { to: homePath, label: 'Начало', icon: HomeIcon, end: true },
-    ...(isStudent
-      ? [
-          { to: '/journal', label: 'Дневник', icon: JournalIcon, end: false },
-          { to: '/statistics', label: 'Статистики', icon: ChartIcon, end: false },
-        ]
-      : []),
+    ...(showJournalAndStatistics ? [{ to: '/journal', label: 'Дневник', icon: JournalIcon, end: false }] : []),
+    ...(showStudents ? [{ to: '/students', label: 'Студенти', icon: StudentsIcon, end: false }] : []),
+    ...(showJournalAndStatistics ? [{ to: '/statistics', label: 'Статистики', icon: ChartIcon, end: false }] : []),
     { to: '/calendar', label: 'Календар', icon: CalendarIcon, end: false },
   ];
 

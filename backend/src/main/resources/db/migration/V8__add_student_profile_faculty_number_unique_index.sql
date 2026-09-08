@@ -1,0 +1,33 @@
+-- Prior to this migration, faculty_number had no uniqueness constraint at all
+-- (AdminController wrote it freely), so two students could carry the same
+-- value and a lookup-by-faculty-number feature would have no reliable way to
+-- pick one. The index below is deliberately a *plain* unique index on the raw
+-- column: no expression (e.g. LOWER(...)) and no partial WHERE clause. Tests
+-- run Flyway against H2 in MODE=PostgreSQL (see
+-- backend/src/test/resources/application.yml), and H2 does not support
+-- expression or partial indexes even in that compatibility mode — every prior
+-- migration in this project sticks to plain CREATE INDEX/UNIQUE for the same
+-- reason.
+--
+-- A plain unique index already allows any number of NULLs, so unset faculty
+-- numbers never collide. The only remaining risk is stored values that differ
+-- only by case or surrounding whitespace ("f12345" vs "F12345"), which a
+-- plain index treats as distinct. The UPDATE below normalizes every existing
+-- row the same way the application now normalizes on every future write
+-- (see StudentProfileNormalizer): blank becomes NULL, everything else is
+-- trimmed and upper-cased. NULLIF/UPPER/TRIM are portable between Postgres
+-- and H2.
+UPDATE student_profiles SET faculty_number = NULLIF(UPPER(TRIM(faculty_number)), '');
+
+-- If two students already share a real (not merely case/whitespace) faculty
+-- number, the CREATE UNIQUE INDEX below will fail the migration. That is
+-- intentional — silently picking a winner would misattribute grades looked
+-- up by that number — and requires an admin to resolve the clash by hand.
+-- To find the offending rows before touching anything:
+--
+--   SELECT faculty_number, COUNT(*)
+--   FROM student_profiles
+--   WHERE faculty_number IS NOT NULL
+--   GROUP BY faculty_number
+--   HAVING COUNT(*) > 1;
+CREATE UNIQUE INDEX idx_student_profiles_faculty_number ON student_profiles (faculty_number);

@@ -78,4 +78,32 @@ class UserValidationServiceTest {
         assertThrows(IllegalArgumentException.class,
                 () -> service.validate(Role.ADMIN, "admin", "Silna-Parola1"));
     }
+
+    @Test
+    void demoPasswordValidationAcceptsAPasswordWithNoUppercase() {
+        // The whole point of validateDemoPassword vs. validatePassword: this
+        // is exactly what password12345 (the documented demo/seed password)
+        // looks like, and validatePassword would reject it.
+        assertDoesNotThrow(() -> service.validateDemoPassword("teacher1@uni-sofia.bg", "password12345"));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.validatePassword("teacher1@uni-sofia.bg", "password12345"));
+    }
+
+    @Test
+    void demoPasswordValidationStillRejectsATooShortPassword() {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.validateDemoPassword("teacher1@uni-sofia.bg", "short1"));
+    }
+
+    @Test
+    void demoPasswordValidationStillRejectsACommonPassword() {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.validateDemoPassword("ivan@test.com", "password123"));
+    }
+
+    @Test
+    void demoPasswordValidationStillRejectsAPasswordContainingTheUsername() {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.validateDemoPassword("student1@test.com", "student1-parola"));
+    }
 }
