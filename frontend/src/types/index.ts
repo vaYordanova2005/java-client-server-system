@@ -143,6 +143,21 @@ export interface ImportUsersResponse {
   skipped: number;
 }
 
+export interface Subject {
+  id: number;
+  name: string;
+  faculty: string | null;
+  specialty: string | null;
+  active: boolean;
+}
+
+export interface SubjectTeacherAssignment {
+  id: number;
+  teacherUsername: string;
+  /** {@code null} means the assignment covers every group. */
+  groupNumber: string | null;
+}
+
 export interface StudentProfileSummary {
   studentUsername: string;
   degreeLevel: string | null;

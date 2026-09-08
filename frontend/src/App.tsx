@@ -10,6 +10,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { JournalPage } from './pages/JournalPage';
 import { StatisticsPage } from './pages/StatisticsPage';
 import { StudentsPage } from './pages/StudentsPage';
+import { SubjectsPage } from './pages/SubjectsPage';
 import { CalendarPage } from './pages/CalendarPage';
 
 function HomeRedirect() {
@@ -67,6 +68,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRole="TEACHER">
             <StudentsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/subjects"
+        element={
+          <ProtectedRoute allowedRole="ADMIN">
+            <SubjectsPage />
           </ProtectedRoute>
         }
       />
