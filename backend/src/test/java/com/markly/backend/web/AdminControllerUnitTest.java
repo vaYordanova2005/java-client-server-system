@@ -3,9 +3,12 @@ package com.markly.backend.web;
 import com.markly.backend.domain.Role;
 import com.markly.backend.domain.StudentProfile;
 import com.markly.backend.domain.User;
+import com.markly.backend.repository.AuditLogRepository;
 import com.markly.backend.repository.GradeRepository;
 import com.markly.backend.repository.StudentProfileRepository;
 import com.markly.backend.repository.UserRepository;
+import com.markly.backend.security.ClientIpResolver;
+import com.markly.backend.service.AuditLogService;
 import com.markly.backend.service.StudentRosterService;
 import com.markly.backend.service.UserValidationService;
 import com.markly.backend.web.dto.UpsertStudentProfileRequest;
@@ -53,11 +56,17 @@ class AdminControllerUnitTest {
     private GradeRepository gradeRepository;
     @Mock
     private StudentRosterService studentRosterService;
+    @Mock
+    private AuditLogRepository auditLogRepository;
+    @Mock
+    private AuditLogService auditLogService;
+    @Mock
+    private ClientIpResolver clientIpResolver;
 
     private AdminController controller() {
         return new AdminController(
                 userRepository, userValidationService, passwordEncoder, studentProfileRepository,
-                gradeRepository, studentRosterService);
+                gradeRepository, studentRosterService, auditLogRepository, auditLogService, clientIpResolver);
     }
 
     private UpsertStudentProfileRequest request(String username, String facultyNumber) {

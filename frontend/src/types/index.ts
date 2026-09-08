@@ -111,6 +111,25 @@ export interface StudentRosterSummary {
   groupNumber: string | null;
 }
 
+export interface AuditLogEntry {
+  id: number;
+  eventType: string;
+  actorUsername: string | null;
+  targetUsername: string | null;
+  ip: string | null;
+  detail: string | null;
+  createdAt: string;
+}
+
+/** Mirrors the backend's plain-record `PageResponse<T>`. */
+export interface PageResponse<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
 export interface StudentProfileSummary {
   studentUsername: string;
   degreeLevel: string | null;

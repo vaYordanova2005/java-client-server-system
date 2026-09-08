@@ -1,7 +1,8 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import apiClient, { extractErrorMessage } from '../api/client';
 import { Layout } from '../routes/Layout';
 import { useAuth } from '../auth/useAuth';
+import { useAuditLog, type AuditLogFilters } from '../hooks/useAuditLog';
 import type { Role, StudentProfileSummary, UserSummary } from '../types';
 
 type ProfileFormState = {
@@ -60,6 +61,15 @@ export function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  const [auditEventType, setAuditEventType] = useState('');
+  const [auditInvolving, setAuditInvolving] = useState('');
+  const [auditPage, setAuditPage] = useState(0);
+  const auditFilters: AuditLogFilters = useMemo(
+    () => ({ eventType: auditEventType || undefined, involving: auditInvolving || undefined }),
+    [auditEventType, auditInvolving]
+  );
+  const { result: auditResult, error: auditError, loading: auditLoading } = useAuditLog(auditFilters, auditPage);
 
   const [profileUsername, setProfileUsername] = useState('');
   const [profileForm, setProfileForm] = useState<ProfileFormState | null>(null);
@@ -311,6 +321,83 @@ export function AdminDashboard() {
               ))}
             </tbody>
           </table>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>Одит лог</h2>
+        <form className="inline-form" onSubmit={(e) => e.preventDefault()}>
+          <label>
+            Тип събитие
+            <input
+              value={auditEventType}
+              onChange={(e) => {
+                setAuditEventType(e.target.value);
+                setAuditPage(0);
+              }}
+              placeholder="напр. ACCOUNT_STATUS_CHANGED"
+            />
+          </label>
+          <label>
+            Участник (извършил или засегнат)
+            <input
+              value={auditInvolving}
+              onChange={(e) => {
+                setAuditInvolving(e.target.value);
+                setAuditPage(0);
+              }}
+              placeholder="имейл"
+            />
+          </label>
+        </form>
+        {auditLoading && <p>Зареждане...</p>}
+        {auditError && <p className="error">{auditError}</p>}
+        {!auditLoading && !auditError && (
+          <>
+            {auditResult.content.length === 0 ? (
+              <p>Няма събития, отговарящи на филтъра.</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Дата</th>
+                    <th>Тип</th>
+                    <th>Извършено от</th>
+                    <th>Засяга</th>
+                    <th>IP</th>
+                    <th>Детайли</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditResult.content.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>{new Date(entry.createdAt).toLocaleString('bg-BG')}</td>
+                      <td>{entry.eventType}</td>
+                      <td>{entry.actorUsername ?? '—'}</td>
+                      <td>{entry.targetUsername ?? '—'}</td>
+                      <td>{entry.ip ?? '—'}</td>
+                      <td>{entry.detail ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <div className="user-actions">
+              <button type="button" disabled={auditPage === 0} onClick={() => setAuditPage((p) => p - 1)}>
+                Предишна
+              </button>
+              <span>
+                Страница {auditResult.page + 1} от {Math.max(auditResult.totalPages, 1)}
+              </span>
+              <button
+                type="button"
+                disabled={auditPage + 1 >= auditResult.totalPages}
+                onClick={() => setAuditPage((p) => p + 1)}
+              >
+                Следваща
+              </button>
+            </div>
+          </>
         )}
       </section>
     </Layout>

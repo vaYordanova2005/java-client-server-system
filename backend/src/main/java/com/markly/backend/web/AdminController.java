@@ -4,23 +4,30 @@ import com.markly.backend.domain.Grade;
 import com.markly.backend.domain.Role;
 import com.markly.backend.domain.StudentProfile;
 import com.markly.backend.domain.User;
+import com.markly.backend.repository.AuditLogRepository;
 import com.markly.backend.repository.GradeRepository;
 import com.markly.backend.repository.StudentProfileRepository;
 import com.markly.backend.repository.UserRepository;
+import com.markly.backend.security.ClientIpResolver;
+import com.markly.backend.service.AuditLogService;
 import com.markly.backend.service.StudentProfileNormalizer;
 import com.markly.backend.service.StudentRosterService;
 import com.markly.backend.service.UserValidationService;
 import com.markly.backend.web.dto.AdminGradeResponse;
+import com.markly.backend.web.dto.AuditLogResponse;
 import com.markly.backend.web.dto.CreateUserRequest;
+import com.markly.backend.web.dto.PageResponse;
 import com.markly.backend.web.dto.StudentProfileResponse;
 import com.markly.backend.web.dto.StudentRosterResponse;
 import com.markly.backend.web.dto.UpdateUserStatusRequest;
 import com.markly.backend.web.dto.UpsertStudentProfileRequest;
 import com.markly.backend.web.dto.UserResponse;
 import com.markly.backend.security.AppUserPrincipal;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -32,14 +39,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
-
-    private static final Logger audit = LoggerFactory.getLogger("com.markly.audit");
 
     /** Name of the unique index from V8, matched below to scope the DataIntegrityViolationException catch. */
     private static final String FACULTY_NUMBER_UNIQUE_INDEX = "idx_student_profiles_faculty_number";
@@ -50,6 +53,9 @@ public class AdminController {
     private final StudentProfileRepository studentProfileRepository;
     private final GradeRepository gradeRepository;
     private final StudentRosterService studentRosterService;
+    private final AuditLogRepository auditLogRepository;
+    private final AuditLogService auditLogService;
+    private final ClientIpResolver clientIpResolver;
 
     public AdminController(
             UserRepository userRepository,
@@ -57,13 +63,19 @@ public class AdminController {
             PasswordEncoder passwordEncoder,
             StudentProfileRepository studentProfileRepository,
             GradeRepository gradeRepository,
-            StudentRosterService studentRosterService) {
+            StudentRosterService studentRosterService,
+            AuditLogRepository auditLogRepository,
+            AuditLogService auditLogService,
+            ClientIpResolver clientIpResolver) {
         this.userRepository = userRepository;
         this.userValidationService = userValidationService;
         this.passwordEncoder = passwordEncoder;
         this.studentProfileRepository = studentProfileRepository;
         this.gradeRepository = gradeRepository;
         this.studentRosterService = studentRosterService;
+        this.auditLogRepository = auditLogRepository;
+        this.auditLogService = auditLogService;
+        this.clientIpResolver = clientIpResolver;
     }
 
     @GetMapping("/users")
@@ -98,7 +110,8 @@ public class AdminController {
     public UserResponse updateUserStatus(
             @PathVariable Long id,
             @Valid @RequestBody UpdateUserStatusRequest request,
-            @AuthenticationPrincipal AppUserPrincipal currentAdmin) {
+            @AuthenticationPrincipal AppUserPrincipal currentAdmin,
+            HttpServletRequest httpRequest) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Няма потребител с този идентификатор"));
         if (user.getUsername().equalsIgnoreCase(currentAdmin.getUsername())) {
@@ -111,20 +124,42 @@ public class AdminController {
             user.setLockedUntil(null);
             user.setFailedLoginAttempts(0);
         }
-        audit.warn("ACCOUNT_STATUS_CHANGED username='{}' enabled={} by='{}'",
-                user.getUsername(), request.enabled(), currentAdmin.getUsername());
+        auditLogService.record("ACCOUNT_STATUS_CHANGED", currentAdmin.getUsername(), user.getUsername(),
+                clientIpResolver.resolve(httpRequest), "enabled=" + request.enabled());
         return UserResponse.from(userRepository.save(user));
     }
 
     /** Lifts a brute-force lockout before its 15 minutes are up. */
     @PostMapping("/users/{id}/unlock")
-    public UserResponse unlockUser(@PathVariable Long id, @AuthenticationPrincipal AppUserPrincipal currentAdmin) {
+    public UserResponse unlockUser(
+            @PathVariable Long id, @AuthenticationPrincipal AppUserPrincipal currentAdmin, HttpServletRequest httpRequest) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Няма потребител с този идентификатор"));
         user.setLockedUntil(null);
         user.setFailedLoginAttempts(0);
-        audit.info("ACCOUNT_UNLOCKED username='{}' by='{}'", user.getUsername(), currentAdmin.getUsername());
+        auditLogService.record("ACCOUNT_UNLOCKED", currentAdmin.getUsername(), user.getUsername(),
+                clientIpResolver.resolve(httpRequest), null);
         return UserResponse.from(userRepository.save(user));
+    }
+
+    /**
+     * {@code involving} is a convenience filter that matches either column —
+     * useful for "anything about this person," since {@code actorUsername}
+     * and {@code targetUsername} differ for most events (e.g. one admin
+     * deleting another user's account) and a plain {@code username} filter
+     * would be ambiguous about which one it means.
+     */
+    @GetMapping("/audit-log")
+    public PageResponse<AuditLogResponse> auditLog(
+            @RequestParam(required = false) String eventType,
+            @RequestParam(required = false) String actorUsername,
+            @RequestParam(required = false) String targetUsername,
+            @RequestParam(required = false) String involving,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        var result = auditLogRepository.search(
+                eventType, actorUsername, targetUsername, involving, PageRequest.of(page, size));
+        return PageResponse.from(result, AuditLogResponse::from);
     }
 
     /** Shared with the teacher roster ({@code TeacherController}) via {@link StudentRosterService}. */
