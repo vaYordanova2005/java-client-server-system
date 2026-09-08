@@ -3,8 +3,18 @@ import { Layout } from '../routes/Layout';
 import { useAuth } from '../auth/useAuth';
 import { useStudentGrades } from '../hooks/useStudentGrades';
 import { useTeacherGrades } from '../hooks/useTeacherGrades';
-import { ChartIcon, JournalIcon, TrophyIcon, BooksIcon } from '../components/icons';
-import { average, gradeColor, groupBy, semesterAverages, subjectAverages, tierColor } from '../utils/grades';
+import { useAdminGrades } from '../hooks/useAdminGrades';
+import { ChartIcon, JournalIcon, TrophyIcon, BooksIcon, StudentsIcon } from '../components/icons';
+import {
+  average,
+  averagesByKey,
+  FAIL_GRADE,
+  gradeColor,
+  groupBy,
+  semesterAverages,
+  subjectAverages,
+  tierColor,
+} from '../utils/grades';
 
 const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
 const GRADE_VALUES = [2, 3, 4, 5, 6];
@@ -35,6 +45,7 @@ export function StatisticsPage() {
 
   if (user?.role === 'STUDENT') return <StudentStatistics />;
   if (user?.role === 'TEACHER') return <TeacherStatistics />;
+  if (user?.role === 'ADMIN') return <AdminStatistics />;
 
   return (
     <Layout title="Статистики">
@@ -440,6 +451,146 @@ function TeacherStatistics() {
               </div>
             </section>
           )}
+        </>
+      )}
+    </Layout>
+  );
+}
+
+function KeyedAverageBars({ title, entries }: { title: string; entries: { key: string; avg: number; count: number }[] }) {
+  if (entries.length === 0) return null;
+  return (
+    <section className="card">
+      <h2>{title}</h2>
+      <div className="subject-bars">
+        {entries.map(({ key, avg, count }) => (
+          <div className="subject-bar-row" key={key}>
+            <span className="subject-bar-label">{key}</span>
+            <div className="bar-track">
+              <div
+                className="bar-fill"
+                style={{ width: `${(avg / GRADE_VALUES[GRADE_VALUES.length - 1]) * 100}%`, background: tierColor(avg) }}
+              />
+            </div>
+            <span className="subject-bar-value">
+              {avg.toFixed(2)} <small>({count})</small>
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * System-wide counterpart to {@link TeacherStatistics}: same stat-tile and
+ * bar-chart building blocks, but spanning every teacher's grades, with a
+ * pass/fail rate tile and faculty/specialty/group breakdowns on top — none
+ * of which a single teacher's own statistics need.
+ */
+function AdminStatistics() {
+  const { grades, error, loading } = useAdminGrades();
+
+  const stats = useMemo(() => {
+    if (grades.length === 0) return null;
+
+    // grades.length > 0 here, so this can never be the empty-input case.
+    const overallAvg = average(grades.map((g) => g.grade))!;
+    const distribution = GRADE_VALUES.map((value) => {
+      const count = grades.filter((g) => g.grade === value).length;
+      return { value, count, pct: (count / grades.length) * 100 };
+    });
+    const studentCount = new Set(grades.map((g) => g.studentUsername)).size;
+    const passCount = grades.filter((g) => g.grade > FAIL_GRADE).length;
+    const passRate = (passCount / grades.length) * 100;
+
+    const byFaculty = averagesByKey(
+      grades.filter((g): g is typeof g & { faculty: string } => !!g.faculty),
+      (g) => g.faculty
+    );
+    const bySpecialty = averagesByKey(
+      grades.filter((g): g is typeof g & { specialty: string } => !!g.specialty),
+      (g) => g.specialty
+    );
+    const byGroup = averagesByKey(
+      grades.filter((g): g is typeof g & { groupNumber: string } => !!g.groupNumber),
+      (g) => g.groupNumber
+    );
+
+    return { overallAvg, total: grades.length, distribution, studentCount, passRate, byFaculty, bySpecialty, byGroup };
+  }, [grades]);
+
+  return (
+    <Layout>
+      {loading && (
+        <section className="card">
+          <p>Зареждане...</p>
+        </section>
+      )}
+      {error && (
+        <section className="card">
+          <p className="error">{error}</p>
+        </section>
+      )}
+      {!loading && !error && grades.length === 0 && (
+        <section className="card">
+          <p>Все още няма въведени оценки.</p>
+        </section>
+      )}
+
+      {!loading && stats && (
+        <>
+          <div className="stat-strip">
+            <div className="stat-tile" style={{ '--tile-accent': tierColor(stats.overallAvg) } as CSSProperties}>
+              <ChartIcon />
+              <div>
+                <strong>{stats.overallAvg.toFixed(2)}</strong>
+                <span>Общ успех</span>
+              </div>
+            </div>
+            <div className="stat-tile">
+              <JournalIcon />
+              <div>
+                <strong>{stats.total}</strong>
+                <span>Оценки</span>
+              </div>
+            </div>
+            <div className="stat-tile" style={{ '--tile-accent': 'var(--success)' } as CSSProperties}>
+              <StudentsIcon />
+              <div>
+                <strong>{stats.studentCount}</strong>
+                <span>Студенти</span>
+              </div>
+            </div>
+            <div className="stat-tile">
+              <TrophyIcon />
+              <div>
+                <strong>{stats.passRate.toFixed(0)}%</strong>
+                <span>Успеваемост</span>
+              </div>
+            </div>
+          </div>
+
+          <section className="card">
+            <h2>Разпределение на оценките</h2>
+            <div className="subject-bars">
+              {stats.distribution.map(({ value, count, pct }) => (
+                <div className="subject-bar-row" key={value}>
+                  <span className="subject-bar-label">Оценка {value}</span>
+                  <div className="bar-track">
+                    <div className="bar-fill" style={{ width: `${pct}%`, background: gradeColor(value) }} />
+                  </div>
+                  <span className="subject-bar-value">
+                    {count} <small>({pct.toFixed(0)}%)</small>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <KeyedAverageBars title="По факултет" entries={stats.byFaculty} />
+          <KeyedAverageBars title="По специалност" entries={stats.bySpecialty} />
+          <KeyedAverageBars title="По група" entries={stats.byGroup} />
         </>
       )}
     </Layout>

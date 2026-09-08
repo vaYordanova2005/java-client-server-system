@@ -45,6 +45,27 @@ export interface TeacherGradeSummary {
   groupNumber: string | null;
 }
 
+/**
+ * Cross-teacher counterpart to {@link TeacherGradeSummary} — mirrors the
+ * backend's `AdminGradeResponse`. Carries `teacherUsername` and `faculty` on
+ * top of the same registrar fields, since the admin journal spans every
+ * teacher and needs to say who entered a grade and group by faculty.
+ */
+export interface AdminGradeSummary {
+  id: number;
+  subject: string;
+  semester: number;
+  grade: number;
+  gradeType: GradeType;
+  createdAt: string;
+  studentUsername: string;
+  teacherUsername: string | null;
+  facultyNumber: string | null;
+  faculty: string | null;
+  specialty: string | null;
+  groupNumber: string | null;
+}
+
 export type CalendarEventType = 'TEST' | 'HOLIDAY' | 'EVENT';
 
 export interface CalendarEventSummary {

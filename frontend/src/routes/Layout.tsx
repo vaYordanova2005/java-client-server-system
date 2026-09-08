@@ -5,10 +5,10 @@ import { HomeIcon, JournalIcon, ChartIcon, CalendarIcon, StudentsIcon } from '..
 import { NetworkField } from '../components/NetworkField';
 import type { Role } from '../types';
 
-// Дневник and Статистики render real data for STUDENT (own grades) and
-// TEACHER (own-entered grades); ADMIN still gets "в процес на разработка" on
-// those routes, so the nav doesn't offer them there.
-const ROLES_WITH_JOURNAL_AND_STATISTICS: Role[] = ['STUDENT', 'TEACHER'];
+// Дневник and Статистики render real data for STUDENT (own grades), TEACHER
+// (own-entered grades), and ADMIN (system-wide, read-only, across every
+// teacher and student).
+const ROLES_WITH_JOURNAL_AND_STATISTICS: Role[] = ['STUDENT', 'TEACHER', 'ADMIN'];
 
 export function Layout({ title, children }: { title?: string; children: ReactNode }) {
   const { user, logout } = useAuth();

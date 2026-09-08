@@ -1,14 +1,19 @@
 package com.markly.backend.web;
 
+import com.markly.backend.domain.Grade;
 import com.markly.backend.domain.Role;
 import com.markly.backend.domain.StudentProfile;
 import com.markly.backend.domain.User;
+import com.markly.backend.repository.GradeRepository;
 import com.markly.backend.repository.StudentProfileRepository;
 import com.markly.backend.repository.UserRepository;
 import com.markly.backend.service.StudentProfileNormalizer;
+import com.markly.backend.service.StudentRosterService;
 import com.markly.backend.service.UserValidationService;
+import com.markly.backend.web.dto.AdminGradeResponse;
 import com.markly.backend.web.dto.CreateUserRequest;
 import com.markly.backend.web.dto.StudentProfileResponse;
+import com.markly.backend.web.dto.StudentRosterResponse;
 import com.markly.backend.web.dto.UpdateUserStatusRequest;
 import com.markly.backend.web.dto.UpsertStudentProfileRequest;
 import com.markly.backend.web.dto.UserResponse;
@@ -24,6 +29,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,16 +48,22 @@ public class AdminController {
     private final UserValidationService userValidationService;
     private final PasswordEncoder passwordEncoder;
     private final StudentProfileRepository studentProfileRepository;
+    private final GradeRepository gradeRepository;
+    private final StudentRosterService studentRosterService;
 
     public AdminController(
             UserRepository userRepository,
             UserValidationService userValidationService,
             PasswordEncoder passwordEncoder,
-            StudentProfileRepository studentProfileRepository) {
+            StudentProfileRepository studentProfileRepository,
+            GradeRepository gradeRepository,
+            StudentRosterService studentRosterService) {
         this.userRepository = userRepository;
         this.userValidationService = userValidationService;
         this.passwordEncoder = passwordEncoder;
         this.studentProfileRepository = studentProfileRepository;
+        this.gradeRepository = gradeRepository;
+        this.studentRosterService = studentRosterService;
     }
 
     @GetMapping("/users")
@@ -111,6 +125,32 @@ public class AdminController {
         user.setFailedLoginAttempts(0);
         audit.info("ACCOUNT_UNLOCKED username='{}' by='{}'", user.getUsername(), currentAdmin.getUsername());
         return UserResponse.from(userRepository.save(user));
+    }
+
+    /** Shared with the teacher roster ({@code TeacherController}) via {@link StudentRosterService}. */
+    @GetMapping("/students")
+    public List<StudentRosterResponse> allStudents() {
+        return studentRosterService.allStudents();
+    }
+
+    /**
+     * System-wide grades, across every teacher and student — the admin
+     * counterpart to {@code TeacherController#myGrades}. Deliberately
+     * unpaginated, consistent with that endpoint's own per-teacher list; fine
+     * at this app's current scale, but the first endpoint likely to need
+     * pagination if the dataset grows.
+     */
+    @GetMapping("/grades")
+    public List<AdminGradeResponse> allGrades() {
+        List<Grade> grades = gradeRepository.findAllByOrderByCreatedAtDesc();
+        Set<User> students = grades.stream().map(Grade::getStudent).collect(Collectors.toSet());
+        Map<Long, StudentProfile> profilesByStudentId = students.isEmpty()
+                ? Map.of()
+                : studentProfileRepository.findByStudentIn(students).stream()
+                        .collect(Collectors.toMap(p -> p.getStudent().getId(), p -> p));
+        return grades.stream()
+                .map(g -> AdminGradeResponse.from(g, profilesByStudentId.get(g.getStudent().getId())))
+                .toList();
     }
 
     @GetMapping("/students/profile")

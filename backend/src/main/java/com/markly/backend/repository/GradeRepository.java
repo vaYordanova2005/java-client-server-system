@@ -33,4 +33,13 @@ public interface GradeRepository extends JpaRepository<Grade, Long> {
      */
     @Query("select g from Grade g left join fetch g.student where g.id = :id and g.teacher = :teacher")
     Optional<Grade> findByIdAndTeacher(@Param("id") Long id, @Param("teacher") User teacher);
+
+    /**
+     * System-wide, for the admin journal/statistics views — unlike the two
+     * queries above, both {@code student} and {@code teacher} are fetched
+     * eagerly, since {@code AdminGradeResponse} reads both associations and
+     * {@code open-in-view} is disabled.
+     */
+    @Query("select g from Grade g left join fetch g.student left join fetch g.teacher order by g.createdAt desc")
+    List<Grade> findAllByOrderByCreatedAtDesc();
 }
