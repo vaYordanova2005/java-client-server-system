@@ -1,5 +1,7 @@
 package com.markly.backend.service;
 
+import java.util.Locale;
+
 /**
  * Shared by every writer of {@code student_profiles.faculty_number}
  * ({@code AdminController}, {@code DemoDataSeeder}, and the lookup input in
@@ -22,6 +24,6 @@ public final class StudentProfileNormalizer {
             return null;
         }
         String trimmed = facultyNumber.trim();
-        return trimmed.isEmpty() ? null : trimmed.toUpperCase();
+        return trimmed.isEmpty() ? null : trimmed.toUpperCase(Locale.ROOT);
     }
 }

@@ -286,7 +286,7 @@ export function AdminDashboard() {
             />
           </label>
           <label>
-            Парола (мин. 5 символа)
+            Парола (мин. 10 символа, главна и малка буква, цифра)
             <input
               type="password"
               value={password}

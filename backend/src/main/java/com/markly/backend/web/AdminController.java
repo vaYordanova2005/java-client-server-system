@@ -58,6 +58,14 @@ public class AdminController {
     private static final String FACULTY_NUMBER_UNIQUE_INDEX = "idx_student_profiles_faculty_number";
 
     /**
+     * Upper bound on the client-supplied {@code size} param of every
+     * paginated endpoint below, so {@code ?size=1000000} can't be used to
+     * fetch the whole table in one request and defeat the pagination those
+     * endpoints exist to enforce.
+     */
+    private static final int MAX_PAGE_SIZE = 200;
+
+    /**
      * Content types actually seen in the wild for a CSV export, across
      * browsers/OSes/Excel — there is no single standard one. Checked only as
      * a fallback when the filename itself doesn't end in {@code .csv} (see
@@ -119,7 +127,8 @@ public class AdminController {
     @GetMapping("/users")
     public PageResponse<UserResponse> listUsers(
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size) {
-        Page<User> users = userRepository.findAll(PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id")));
+        Page<User> users = userRepository.findAll(
+                PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE), Sort.by(Sort.Direction.DESC, "id")));
         return PageResponse.from(users, UserResponse::from);
     }
 
@@ -308,7 +317,7 @@ public class AdminController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         var result = auditLogRepository.search(
-                eventType, actorUsername, targetUsername, involving, PageRequest.of(page, size));
+                eventType, actorUsername, targetUsername, involving, PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE)));
         return PageResponse.from(result, AuditLogResponse::from);
     }
 
@@ -331,7 +340,7 @@ public class AdminController {
     @GetMapping("/grades")
     public PageResponse<AdminGradeResponse> allGrades(
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size) {
-        Page<Grade> grades = gradeRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size));
+        Page<Grade> grades = gradeRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE)));
         Set<User> students = grades.getContent().stream().map(Grade::getStudent).collect(Collectors.toSet());
         Map<Long, StudentProfile> profilesByStudentId = students.isEmpty()
                 ? Map.of()
