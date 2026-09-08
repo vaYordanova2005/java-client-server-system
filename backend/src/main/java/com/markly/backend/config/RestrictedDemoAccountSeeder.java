@@ -36,10 +36,11 @@ public class RestrictedDemoAccountSeeder implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(RestrictedDemoAccountSeeder.class);
 
-    static final String DEMO_TEACHER_USERNAME = "teacher@uni-sofia.bg";
-    static final String DEMO_STUDENT_USERNAME = "student@uni-sofia.bg";
+    /** Public (unlike {@link DemoDataSeeder}'s equivalents) so tests can assert against these instead of duplicating them as literals. */
+    public static final String DEMO_TEACHER_USERNAME = "teacher@uni-sofia.bg";
+    public static final String DEMO_STUDENT_USERNAME = "student@uni-sofia.bg";
     /** Same constant/convention as {@link DemoDataSeeder} — one shared, documented demo password project-wide. */
-    static final String DEMO_PASSWORD = "password12345";
+    public static final String DEMO_PASSWORD = "password12345";
 
     /** Deliberately non-numeric so it can never collide with a real or bulk-demo faculty number. */
     private static final String DEMO_FACULTY_NUMBER = "DEMO0001";

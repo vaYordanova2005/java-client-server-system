@@ -79,6 +79,9 @@ letting anyone try the live app without touching real data:
 * `teacher@uni-sofia.bg` / `password12345`
 * `student@uni-sofia.bg` / `password12345`
 
+The login page also has a one-click button for each, so nobody actually needs to type
+either credential in by hand.
+
 Both can read everything their role normally sees, but every write (add a grade, change
 password, create a user, etc.) is rejected with *"Това е демо акаунт — само преглед,
 действието не е разрешено."* instead of applying. The demo teacher's reads are also scoped:

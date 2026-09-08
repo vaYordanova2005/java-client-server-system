@@ -42,9 +42,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class RestrictedDemoAccountTest {
 
-    private static final String DEMO_TEACHER_USERNAME = "teacher@uni-sofia.bg";
-    private static final String DEMO_STUDENT_USERNAME = "student@uni-sofia.bg";
-    private static final String DEMO_PASSWORD = "password12345";
+    // Referenced from the seeder rather than duplicated as literals, so a future change to
+    // either constant there can't silently desync from what this test logs in as.
+    private static final String DEMO_TEACHER_USERNAME = RestrictedDemoAccountSeeder.DEMO_TEACHER_USERNAME;
+    private static final String DEMO_STUDENT_USERNAME = RestrictedDemoAccountSeeder.DEMO_STUDENT_USERNAME;
+    private static final String DEMO_PASSWORD = RestrictedDemoAccountSeeder.DEMO_PASSWORD;
     private static final String DEMO_MESSAGE_FRAGMENT = "демо акаунт";
 
     @Autowired

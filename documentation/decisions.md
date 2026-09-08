@@ -168,6 +168,10 @@ environment including production (no `SEED_DEMO_DATA` gate, same as the real adm
 `teacher@uni-sofia.bg` and `student@uni-sofia.bg`, both flagged `users.is_demo`. This is a
 distinct, deliberate decision from the bulk demo data above:
 
+* **The login page has a one-click button for each.** `LoginPage.tsx` hardcodes the two
+  usernames and the shared password (`password12345` — public by design, same value as
+  `RestrictedDemoAccountSeeder.DEMO_PASSWORD`, duplicated here because a frontend build
+  can't import a backend constant); clicking one signs straight in, no typing required.
 * **Read is normal, write is always blocked.** `JwtAuthenticationFilter` rejects every
   non-GET/HEAD/OPTIONS request from a demo account with a friendly message, except
   `POST /api/auth/logout`. This is enforced once, centrally, independent of role — it would
