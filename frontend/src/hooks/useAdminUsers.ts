@@ -32,6 +32,13 @@ export function useAdminUsers(page: number, size = 50) {
       },
       (err) => {
         if (ignore) return;
+        // `result` is deliberately left as whatever page was showing before
+        // (not reset to EMPTY_PAGE) — same "stale data + a surfaced error"
+        // choice as useAdminGrades's reload(), so a failed page turn doesn't
+        // wipe out an otherwise-fine table out from under the admin. The
+        // caller currently renders the error in place of the table rather
+        // than alongside it (see AdminDashboard), but `result` stays correct
+        // for a caller that wants to show both.
         setError(extractErrorMessage(err));
         setLoading(false);
       }

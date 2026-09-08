@@ -11,6 +11,15 @@ import type { AdminGradeSummary, PageResponse } from '../types';
  * the same total transfer as the old single unpaginated call, but each
  * individual request/query now stays bounded instead of the backend running
  * one unbounded SELECT whose result only grows over time.
+ *
+ * The state below (`snapshot`, `inflight`, `generation`) is module-level, not
+ * per-hook-call, so every mounted consumer shares one fetch/cache — the point
+ * being that JournalPage and StatisticsPage, both calling this hook, read the
+ * same grades instead of each paying for their own full walk. That sharing
+ * extends to `fetching`/`loading` too: if one of them ever calls `reload()`,
+ * both see the same spinner state at the same time, not just the same data —
+ * intentional (it's one logical resource, not two), just worth being
+ * explicit about since nothing here scopes it per-caller.
  */
 const PAGE_SIZE = 500;
 
@@ -18,7 +27,7 @@ interface Snapshot {
   data: AdminGradeSummary[] | null;
   error: string | null;
   loaded: boolean;
-  /** A fetch (initial or `reload()`) is currently in flight. */
+  /** A fetch (initial or `reload()`) is currently in flight — shared module-wide, see above. */
   fetching: boolean;
 }
 
