@@ -6,10 +6,14 @@ import com.markly.backend.domain.Grade;
 import com.markly.backend.domain.GradeType;
 import com.markly.backend.domain.Role;
 import com.markly.backend.domain.StudentProfile;
+import com.markly.backend.domain.Subject;
+import com.markly.backend.domain.SubjectAssignment;
 import com.markly.backend.domain.User;
 import com.markly.backend.repository.CalendarEventRepository;
 import com.markly.backend.repository.GradeRepository;
 import com.markly.backend.repository.StudentProfileRepository;
+import com.markly.backend.repository.SubjectAssignmentRepository;
+import com.markly.backend.repository.SubjectRepository;
 import com.markly.backend.repository.UserRepository;
 import com.markly.backend.security.AppUserPrincipal;
 import com.markly.backend.security.AuthCookieService;
@@ -68,12 +72,20 @@ class AdminUserManagementTest {
     private CalendarEventRepository calendarEventRepository;
 
     @Autowired
+    private SubjectRepository subjectRepository;
+
+    @Autowired
+    private SubjectAssignmentRepository subjectAssignmentRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     private final List<Long> createdUserIds = new ArrayList<>();
     private final List<Long> createdGradeIds = new ArrayList<>();
     private final List<Long> createdProfileIds = new ArrayList<>();
     private final List<Long> createdEventIds = new ArrayList<>();
+    private final List<Long> createdAssignmentIds = new ArrayList<>();
+    private final List<Long> createdSubjectIds = new ArrayList<>();
 
     private User admin;
 
@@ -84,6 +96,8 @@ class AdminUserManagementTest {
 
     @AfterEach
     void tearDown() {
+        subjectAssignmentRepository.deleteAllByIdInBatch(createdAssignmentIds);
+        subjectRepository.deleteAllByIdInBatch(createdSubjectIds);
         calendarEventRepository.deleteAllByIdInBatch(createdEventIds);
         gradeRepository.deleteAllByIdInBatch(createdGradeIds);
         for (Long id : createdProfileIds) {
@@ -171,6 +185,20 @@ class AdminUserManagementTest {
         CalendarEvent event = calendarEventRepository.save(new CalendarEvent(
                 CalendarEventType.EVENT, "Ден на отворените врати", null, null, LocalDate.now(), null, teacher));
         createdEventIds.add(event.getId());
+
+        mockMvc.perform(delete("/api/admin/users/" + teacher.getId()).with(user(new AppUserPrincipal(admin))))
+                .andExpect(status().isConflict());
+        assertTrue(userRepository.findById(teacher.getId()).isPresent());
+    }
+
+    @Test
+    void deletingATeacherAssignedToASubjectIsBlockedWithConflict() throws Exception {
+        User teacher = save("teacher", Role.TEACHER);
+        Subject subject = subjectRepository.save(new Subject("Предмет-" + UUID.randomUUID(), null, null));
+        createdSubjectIds.add(subject.getId());
+        SubjectAssignment assignment =
+                subjectAssignmentRepository.save(new SubjectAssignment(subject, teacher, ""));
+        createdAssignmentIds.add(assignment.getId());
 
         mockMvc.perform(delete("/api/admin/users/" + teacher.getId()).with(user(new AppUserPrincipal(admin))))
                 .andExpect(status().isConflict());
