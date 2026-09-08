@@ -38,6 +38,12 @@ services:
       # redeploy the backend.
       - key: FRONTEND_ORIGIN
         value: https://markly-frontend.onrender.com
+      # NOTE: Render assigned this backend service the hostname
+      # markly-backend-w80o.onrender.com (a random suffix) because the plain
+      # "markly-backend" name was already reserved by a stale/broken service.
+      # Keep VITE_API_BASE_URL below and the actual dashboard values in sync
+      # with whatever hostname Render reports as the "primary URL" in the
+      # deploy log after a fresh service creation.
       # The session cookie is httpOnly and, because the SPA lives on another
       # host, cross-site — which browsers only accept as SameSite=None; Secure.
       - key: AUTH_COOKIE_SECURE
@@ -58,7 +64,7 @@ services:
       # service is created. Vite bakes env vars in at build time, so after
       # updating this, trigger a manual redeploy (not just a restart).
       - key: VITE_API_BASE_URL
-        value: https://markly-backend.onrender.com/api
+        value: https://markly-backend-w80o.onrender.com/api
     routes:
       - type: rewrite
         source: /*
