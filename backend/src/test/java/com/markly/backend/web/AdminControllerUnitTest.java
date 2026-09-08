@@ -7,6 +7,7 @@ import com.markly.backend.repository.AuditLogRepository;
 import com.markly.backend.repository.CalendarEventRepository;
 import com.markly.backend.repository.GradeRepository;
 import com.markly.backend.repository.StudentProfileRepository;
+import com.markly.backend.repository.SubjectAssignmentRepository;
 import com.markly.backend.repository.UserRepository;
 import com.markly.backend.security.ClientIpResolver;
 import com.markly.backend.service.AuditLogService;
@@ -68,12 +69,14 @@ class AdminControllerUnitTest {
     private CalendarEventRepository calendarEventRepository;
     @Mock
     private UserImportService userImportService;
+    @Mock
+    private SubjectAssignmentRepository subjectAssignmentRepository;
 
     private AdminController controller() {
         return new AdminController(
                 userRepository, userValidationService, passwordEncoder, studentProfileRepository,
                 gradeRepository, studentRosterService, auditLogRepository, auditLogService, clientIpResolver,
-                calendarEventRepository, userImportService);
+                calendarEventRepository, userImportService, subjectAssignmentRepository);
     }
 
     private UpsertStudentProfileRequest request(String username, String facultyNumber) {

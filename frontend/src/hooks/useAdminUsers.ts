@@ -4,6 +4,13 @@ import type { PageResponse, UserSummary } from '../types';
 
 const EMPTY_PAGE: PageResponse<UserSummary> = { content: [], page: 0, size: 50, totalElements: 0, totalPages: 0 };
 
+interface Loaded {
+  /** Which request this data answers; `null` until the first one settles. */
+  key: string | null;
+  result: PageResponse<UserSummary>;
+  error: string | null;
+}
+
 /**
  * Deliberately not built on {@code useApiResource}/{@code resourceCache}
  * (unlike {@code useAuditLog}): that machinery's `loading` means "has never
@@ -15,20 +22,23 @@ const EMPTY_PAGE: PageResponse<UserSummary> = { content: [], page: 0, size: 50, 
  * no indication anything happened in between.
  */
 export function useAdminUsers(page: number, size = 50) {
-  const [result, setResult] = useState<PageResponse<UserSummary>>(EMPTY_PAGE);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
+  const [loaded, setLoaded] = useState<Loaded>({ key: null, result: EMPTY_PAGE, error: null });
+
+  const key = `${page}|${size}|${reloadToken}`;
+  // Derived rather than its own `setLoading(true)` at the top of the effect:
+  // setting state synchronously in an effect body is a cascading render (and
+  // a react-hooks lint error). "The data on screen doesn't answer the
+  // request we're currently making" is the same condition, read straight off
+  // the state instead of maintained as a second copy of it.
+  const loading = loaded.key !== key;
 
   useEffect(() => {
     let ignore = false;
-    setLoading(true);
     apiClient.get<PageResponse<UserSummary>>('/admin/users', { params: { page, size } }).then(
       (response) => {
         if (ignore) return;
-        setResult(response.data);
-        setError(null);
-        setLoading(false);
+        setLoaded({ key, result: response.data, error: null });
       },
       (err) => {
         if (ignore) return;
@@ -39,14 +49,18 @@ export function useAdminUsers(page: number, size = 50) {
         // caller currently renders the error in place of the table rather
         // than alongside it (see AdminDashboard), but `result` stays correct
         // for a caller that wants to show both.
-        setError(extractErrorMessage(err));
-        setLoading(false);
+        setLoaded((previous) => ({ key, result: previous.result, error: extractErrorMessage(err) }));
       }
     );
     return () => {
       ignore = true;
     };
-  }, [page, size, reloadToken]);
+  }, [key, page, size]);
 
-  return { result, error, loading, reload: () => setReloadToken((t) => t + 1) };
+  return {
+    result: loaded.result,
+    error: loaded.error,
+    loading,
+    reload: () => setReloadToken((t) => t + 1),
+  };
 }

@@ -3,6 +3,7 @@ package com.markly.backend.service;
 import com.markly.backend.domain.Role;
 import org.springframework.stereotype.Service;
 
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -106,7 +107,7 @@ public class UserValidationService {
     }
 
     private void checkNotCommon(String password) {
-        if (COMMON_PASSWORDS.contains(password.toLowerCase())) {
+        if (COMMON_PASSWORDS.contains(password.toLowerCase(Locale.ROOT))) {
             throw new IllegalArgumentException("Тази парола е твърде често използвана");
         }
     }
@@ -114,8 +115,8 @@ public class UserValidationService {
     private void checkDoesNotContainUsername(String username, String password) {
         // The local part of the email is public knowledge, so a password built
         // out of it is the first thing an attacker tries.
-        String localPart = username == null ? "" : username.split("@")[0].toLowerCase();
-        if (localPart.length() >= 3 && password.toLowerCase().contains(localPart)) {
+        String localPart = username == null ? "" : username.split("@")[0].toLowerCase(Locale.ROOT);
+        if (localPart.length() >= 3 && password.toLowerCase(Locale.ROOT).contains(localPart)) {
             throw new IllegalArgumentException("Паролата не трябва да съдържа потребителското име");
         }
     }

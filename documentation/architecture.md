@@ -24,13 +24,13 @@ frontend (React + Vite, TS)  --HTTP/JSON + JWT-->  backend (Spring Boot)  -->  P
 
 | Package | Responsibility |
 |---|---|
-| `web/` | REST controllers — `AuthController`, `AdminController` (users + student registrar profiles), `TeacherController` (grades), `StudentController` (own grades + own profile), `CalendarController` (events, read by every role, written by ADMIN/TEACHER). Thin layer: accept DTOs, call service/repository, return DTOs. |
-| `web/dto/` | Request/response DTOs (e.g. `CreateUserRequest`, `GradeResponse`, `LoginResponse`, `StudentProfileResponse`/`UpsertStudentProfileRequest`, `CalendarEventResponse`/`CreateCalendarEventRequest`). The backend never serializes entities directly to clients. |
-| `domain/` | JPA entities — `User`, `Grade`, `StudentProfile` (registrar info, one-to-one with `User`), `CalendarEvent`, `Role` (enum: ADMIN/TEACHER/STUDENT), `CalendarEventType` (enum: TEST/HOLIDAY/EVENT). |
-| `repository/` | Spring Data JPA repositories — `UserRepository`, `GradeRepository`, `StudentProfileRepository`, `CalendarEventRepository`. |
-| `service/` | Business/validation logic outside the controllers — `UserValidationService` (username/email rules, see [`decisions.md`](decisions.md)). |
-| `security/` | JWT — `JwtService` (issues/validates tokens, derives the CSRF token), `AuthCookieService` (the httpOnly session cookie), `JwtAuthenticationFilter` (reads the cookie, checks the CSRF header and the token version), `LoginRateLimitFilter` + `LoginAttemptService` (brute-force limits and the login audit trail), `ClientIpResolver` (client address from `X-Forwarded-For`, see `TRUSTED_PROXIES`), `AppUserDetailsService` + `AppUserPrincipal` (Spring Security user model). |
-| `config/` | `SecurityConfig` (filter chain, roles per endpoint), `DataSeeder` (admin account on startup), `DemoDataSeeder` (demo teachers/students/grades/calendar events/student profiles when `SEED_DEMO_DATA=true`). |
+| `web/` | REST controllers — `AuthController`, `AdminController` (users + student registrar profiles + audit log), `AdminSubjectController` (subject catalog + teacher assignments, `/api/admin/subjects/**`, split out from `AdminController` to keep it navigable), `TeacherController` (grades), `StudentController` (own grades + own profile), `CalendarController` (events, read by every role, written by ADMIN/TEACHER). Thin layer: accept DTOs, call service/repository, return DTOs. |
+| `web/dto/` | Request/response DTOs (e.g. `CreateUserRequest`, `GradeResponse`, `LoginResponse`, `StudentProfileResponse`/`UpsertStudentProfileRequest`, `CalendarEventResponse`/`CreateCalendarEventRequest`, `AuditLogResponse`, `SubjectResponse`/`CreateSubjectRequest`/`UpdateSubjectRequest`, `SubjectAssignmentResponse`/`CreateSubjectAssignmentRequest`, `ImportUsersResponse`/`ImportUserRowResult`, `PageResponse`). The backend never serializes entities directly to clients. |
+| `domain/` | JPA entities — `User`, `Grade` (including `GradeType` enum: TEST/ORAL_EXAM/CLASS_TEST/REGULAR/RETAKE), `StudentProfile` (registrar info, one-to-one with `User`), `CalendarEvent`, `AuditLog`, `Subject` (catalog entry, soft-deletable), `SubjectAssignment` (teacher × subject × optional group), `Role` (enum: ADMIN/TEACHER/STUDENT), `CalendarEventType` (enum: TEST/HOLIDAY/EVENT). |
+| `repository/` | Spring Data JPA repositories — `UserRepository`, `GradeRepository`, `StudentProfileRepository`, `CalendarEventRepository`, `AuditLogRepository`, `SubjectRepository`, `SubjectAssignmentRepository`. |
+| `service/` | Business/validation logic outside the controllers — `UserValidationService` (username/email/password rules, see [`decisions.md`](decisions.md)), `StudentProfileNormalizer` (faculty-number normalization), `StudentRosterService` (student roster shared by `AdminController`/`TeacherController`, demo-scoped for a demo teacher), `UserImportService` (CSV parsing/validation for bulk user creation), `AuditLogService` (writes to `audit_log`). |
+| `security/` | JWT — `JwtService` (issues/validates tokens, derives the CSRF token), `AuthCookieService` (the httpOnly session cookie), `JwtAuthenticationFilter` (reads the cookie, checks the CSRF header and the token version, blocks writes from a demo account), `LoginRateLimitFilter` + `LoginAttemptService` (brute-force limits and the login audit trail), `ClientIpResolver` (client address from `X-Forwarded-For`, see `TRUSTED_PROXIES`), `AppUserDetailsService` + `AppUserPrincipal` (Spring Security user model). |
+| `config/` | `SecurityConfig` (filter chain, roles per endpoint), `DataSeeder` (admin account on startup), `DemoDataSeeder` (demo teachers/students/grades/calendar events/student profiles when `SEED_DEMO_DATA=true`), `RestrictedDemoAccountSeeder` (the two always-on, read-only demo accounts — see [`decisions.md`](decisions.md), "Restricted demo accounts"). |
 | `exception/` | `ApiExceptionHandler` (`@ControllerAdvice`) + `ApiError` — a single error format across all endpoints. |
 
 ### Authentication / authorization
@@ -51,6 +51,10 @@ frontend (React + Vite, TS)  --HTTP/JSON + JWT-->  backend (Spring Boot)  -->  P
   Every login outcome is written to the `com.markly.audit` logger.
 * Role-based access is enforced in `SecurityConfig` (endpoint → role) and additionally in
   the controllers where needed (e.g. a teacher can only see/write their own grades).
+* Account-management and subject-catalog actions taken by an admin (status change,
+  unlock, password reset, delete, CSV import, subject/assignment create-update-delete)
+  are written to `audit_log` (`AuditLogService`), readable via
+  `GET /api/admin/audit-log` (filterable by event type, actor, target, or either).
 
 ### Database
 
@@ -73,11 +77,16 @@ never manual ALTERs in production.
 
 ## Roles and access
 
-* **Admin** (`admin`, fixed username) — creates teacher/student accounts and manages
-  students' registrar profiles (faculty number, group, enrolled/completed semester,
-  etc. — `AdminController`, `StudentProfile`). Also has calendar write access.
+* **Admin** (`admin`, fixed username) — creates teacher/student accounts (individually or
+  via CSV import) and manages students' registrar profiles (faculty number, group,
+  enrolled/completed semester, etc. — `AdminController`, `StudentProfile`); can also
+  deactivate/reactivate/unlock/reset-password/delete an account, and manage the subject
+  catalog and teacher assignments (`AdminSubjectController`). Also has calendar write
+  access, and read access to every grade and the audit log system-wide. Full behavior:
+  [`admin.md`](admin.md).
 * **Teacher** (email, must end in `@uni-sofia.bg`) — enters grades for students by email;
-  can also create/delete calendar events (tests, holidays, other events).
+  can also create/delete calendar events (tests, holidays, other events). Full behavior:
+  [`teacher.md`](teacher.md).
 * **Student** (any email) — sees only their own grades (`GET /api/student/grades`, never
   another student's) across a dashboard, journal and statistics view; sees their own
   registrar profile read-only; sees the shared calendar read-only. Full behavior:

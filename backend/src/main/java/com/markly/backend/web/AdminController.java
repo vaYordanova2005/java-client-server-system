@@ -8,6 +8,7 @@ import com.markly.backend.repository.AuditLogRepository;
 import com.markly.backend.repository.CalendarEventRepository;
 import com.markly.backend.repository.GradeRepository;
 import com.markly.backend.repository.StudentProfileRepository;
+import com.markly.backend.repository.SubjectAssignmentRepository;
 import com.markly.backend.repository.UserRepository;
 import com.markly.backend.security.ClientIpResolver;
 import com.markly.backend.service.AuditLogService;
@@ -57,6 +58,14 @@ public class AdminController {
     private static final String FACULTY_NUMBER_UNIQUE_INDEX = "idx_student_profiles_faculty_number";
 
     /**
+     * Upper bound on the client-supplied {@code size} param of every
+     * paginated endpoint below, so {@code ?size=1000000} can't be used to
+     * fetch the whole table in one request and defeat the pagination those
+     * endpoints exist to enforce.
+     */
+    private static final int MAX_PAGE_SIZE = 200;
+
+    /**
      * Content types actually seen in the wild for a CSV export, across
      * browsers/OSes/Excel — there is no single standard one. Checked only as
      * a fallback when the filename itself doesn't end in {@code .csv} (see
@@ -77,6 +86,7 @@ public class AdminController {
     private final ClientIpResolver clientIpResolver;
     private final CalendarEventRepository calendarEventRepository;
     private final UserImportService userImportService;
+    private final SubjectAssignmentRepository subjectAssignmentRepository;
 
     public AdminController(
             UserRepository userRepository,
@@ -89,7 +99,8 @@ public class AdminController {
             AuditLogService auditLogService,
             ClientIpResolver clientIpResolver,
             CalendarEventRepository calendarEventRepository,
-            UserImportService userImportService) {
+            UserImportService userImportService,
+            SubjectAssignmentRepository subjectAssignmentRepository) {
         this.userRepository = userRepository;
         this.userValidationService = userValidationService;
         this.passwordEncoder = passwordEncoder;
@@ -101,6 +112,7 @@ public class AdminController {
         this.clientIpResolver = clientIpResolver;
         this.calendarEventRepository = calendarEventRepository;
         this.userImportService = userImportService;
+        this.subjectAssignmentRepository = subjectAssignmentRepository;
     }
 
     /**
@@ -115,7 +127,8 @@ public class AdminController {
     @GetMapping("/users")
     public PageResponse<UserResponse> listUsers(
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size) {
-        Page<User> users = userRepository.findAll(PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id")));
+        Page<User> users = userRepository.findAll(
+                PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE), Sort.by(Sort.Direction.DESC, "id")));
         return PageResponse.from(users, UserResponse::from);
     }
 
@@ -225,7 +238,10 @@ public class AdminController {
     /**
      * Hard delete, guarded: blocked with 409 if the account has any grade or
      * calendar-event history, since deleting it would silently discard that
-     * history — {@code updateUserStatus} (deactivate) is the reversible
+     * history, or any subject assignment, whose {@code NOT NULL} FK to
+     * {@code users} (V11) the delete would violate outright — the mirror
+     * image of {@code AdminSubjectController#deleteSubjectPermanently}'s
+     * guard on the same relation — {@code updateUserStatus} (deactivate) is the reversible
      * option for that case. A student's registrar profile is deleted in the
      * same transaction as a stated, explicit part of this operation (not an
      * incidental side effect): because {@code StudentProfile.facultyNumber}
@@ -245,9 +261,10 @@ public class AdminController {
         }
         if (gradeRepository.existsByStudent(user)
                 || gradeRepository.existsByTeacher(user)
-                || calendarEventRepository.existsByCreatedBy(user)) {
+                || calendarEventRepository.existsByCreatedBy(user)
+                || subjectAssignmentRepository.existsByTeacher(user)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Потребителят има свързани данни (оценки или календарни събития) — деактивирайте акаунта вместо да го изтривате");
+                    "Потребителят има свързани данни (оценки, календарни събития или разпределения по предмети) — деактивирайте акаунта вместо да го изтривате");
         }
         studentProfileRepository.findByStudent(user).ifPresent(studentProfileRepository::delete);
         userRepository.delete(user);
@@ -300,7 +317,7 @@ public class AdminController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         var result = auditLogRepository.search(
-                eventType, actorUsername, targetUsername, involving, PageRequest.of(page, size));
+                eventType, actorUsername, targetUsername, involving, PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE)));
         return PageResponse.from(result, AuditLogResponse::from);
     }
 
@@ -323,7 +340,7 @@ public class AdminController {
     @GetMapping("/grades")
     public PageResponse<AdminGradeResponse> allGrades(
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size) {
-        Page<Grade> grades = gradeRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size));
+        Page<Grade> grades = gradeRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE)));
         Set<User> students = grades.getContent().stream().map(Grade::getStudent).collect(Collectors.toSet());
         Map<Long, StudentProfile> profilesByStudentId = students.isEmpty()
                 ? Map.of()

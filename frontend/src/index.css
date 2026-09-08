@@ -514,16 +514,19 @@ button.login-forgot:active {
   flex: 1;
   background: transparent;
   border: 1px solid var(--border);
-  color: var(--text);
+  color: #6b7472;
   border-radius: 999px;
   padding: 0.6rem 0.5rem;
   font-size: 0.82rem;
   font-weight: 600;
 }
 
-.login-demo-btn:not(:disabled):hover {
+.login-demo-btn:not(:disabled):hover,
+.login-demo-btn:not(:disabled):focus-visible,
+.login-demo-btn:not(:disabled):active {
+  background: rgba(62, 207, 193, 0.16);
   border-color: var(--primary);
-  color: var(--primary);
+  color: var(--primary-hover);
 }
 
 .home-network-bg {

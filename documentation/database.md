@@ -19,6 +19,7 @@ PostgreSQL. Schema is owned by Flyway migrations in
 | `locked_until` | `TIMESTAMP` | Set by the brute-force lockout, cleared when it expires or an admin unlocks |
 | `failed_login_attempts` | `INTEGER` | `NOT NULL`, default `0` — consecutive failures, reset on a successful login |
 | `token_version` | `INTEGER` | `NOT NULL`, default `0` — carried in every JWT; bumping it invalidates all outstanding tokens for that user |
+| `is_demo` | `BOOLEAN` | `NOT NULL`, default `FALSE` — flags the two fixed accounts from `RestrictedDemoAccountSeeder`; read is normal, every write is rejected (`JwtAuthenticationFilter`), see [`decisions.md`](decisions.md) |
 
 ### `grades`
 
@@ -31,6 +32,7 @@ PostgreSQL. Schema is owned by Flyway migrations in
 | `semester` | `INTEGER` | `NOT NULL` |
 | `grade` | `INTEGER` | `NOT NULL` |
 | `created_at` | `TIMESTAMP WITH TIME ZONE` | `NOT NULL` (no default — set by the app on insert via `@PrePersist`) |
+| `grade_type` | `VARCHAR(20)` | `NOT NULL`, `CHECK (grade_type IN ('TEST', 'ORAL_EXAM', 'CLASS_TEST', 'REGULAR', 'RETAKE'))` — `GradeType` enum. Pre-existing rows were backfilled to `REGULAR`/`RETAKE` by V9, reproducing the same first-in-semester-and-subject-wins rule the frontend used to infer client-side (see V9 below) |
 
 ### `calendar_events`
 
@@ -89,6 +91,62 @@ out of range there.
 `personal_email` existed briefly (`V5`) and was dropped in `V6`: the student's `username`
 already is their email, so a second one on the profile was redundant.
 
+### `audit_log`
+
+Append-only trail of admin/account-security actions (`AuditLogService`, written by
+`AdminController`/`AdminSubjectController`), read via `GET /api/admin/audit-log`
+(`AuditLogRepository.search`, filterable by event type, actor, target, or either via
+`involving`).
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `BIGSERIAL` | PK |
+| `event_type` | `VARCHAR(40)` | `NOT NULL` — e.g. `ACCOUNT_STATUS_CHANGED`, `ACCOUNT_UNLOCKED`, `PASSWORD_RESET`, `USER_DELETED`, `USERS_IMPORTED`, `SUBJECT_CREATED`/`SUBJECT_UPDATED`/`SUBJECT_DELETED`/`SUBJECT_HARD_DELETED`, `SUBJECT_ASSIGNMENT_CREATED`/`SUBJECT_ASSIGNMENT_DELETED` |
+| `actor_username` | `VARCHAR(255)` | nullable — who performed the action |
+| `target_username` | `VARCHAR(255)` | nullable — who/what it was done to |
+| `ip` | `VARCHAR(64)` | nullable — resolved via `ClientIpResolver`, same logic as the login rate limiter |
+| `detail` | `TEXT` | nullable — free-text context, e.g. `enabled=false` or `created=3 skipped=1`; never a password or file contents |
+| `created_at` | `TIMESTAMP` | `NOT NULL` |
+
+No foreign key to `users` on either username column — they are plain-text snapshots at
+the time of the event, deliberately, so a hard-deleted user's own audit trail survives
+the delete instead of being cascade-deleted or orphaned. Indexed on `created_at DESC`
+(`idx_audit_log_created_at`, newest-first listing) and `event_type`
+(`idx_audit_log_event_type`).
+
+### `subjects`
+
+Additive catalog of subject names — `Grade.subject` stays free text and is not a foreign
+key into this table (converting it would mean reconciling every existing free-text value
+against the catalog first). Managed via `AdminSubjectController`.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `BIGSERIAL` | PK |
+| `name` | `VARCHAR(255)` | `NOT NULL` |
+| `faculty` | `VARCHAR(255)` | nullable |
+| `specialty` | `VARCHAR(255)` | nullable |
+| `active` | `BOOLEAN` | `NOT NULL`, default `TRUE` — soft-delete flag |
+| `created_at` | `TIMESTAMP` | `NOT NULL` |
+
+`UNIQUE(name, active)`, not a plain `UNIQUE(name)`: a soft-deleted (`active=false`)
+subject must not block creating a new active subject of the same name, but must still
+collide with itself so an admin is pointed at reactivating it instead of creating a
+duplicate. At most one active and one inactive row can exist per name.
+
+### `subject_teacher_assignments`
+
+Which teacher(s) teach a subject, optionally scoped to a group.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `BIGSERIAL` | PK |
+| `subject_id` | `BIGINT` | `NOT NULL`, FK → `subjects(id)` |
+| `teacher_id` | `BIGINT` | `NOT NULL`, FK → `users(id)` |
+| `group_number` | `VARCHAR(50)` | `NOT NULL`, default `''` — `''` means "the whole subject, not one group"; never `NULL`, since Postgres treats distinct `NULL`s as never equal and a `NULL`-based unique constraint would silently admit duplicate "no group" assignments |
+
+`UNIQUE(subject_id, teacher_id, group_number)`.
+
 ## Relationships
 
 ```
@@ -135,6 +193,11 @@ since legacy/unattributable rows can still be `NULL`.
 | V5 | `V5__add_student_profiles.sql` | Creates `student_profiles` (one-to-one with `users`), including a `personal_email` column. |
 | V6 | `V6__drop_student_profile_personal_email.sql` | Drops `student_profiles.personal_email` — redundant with `users.username`. |
 | V7 | `V7__add_account_security_columns.sql` | Adds `enabled`, `locked_until`, `failed_login_attempts`, `token_version` to `users` — account deactivation, brute-force lockout, and token revocation. |
+| V8 | `V8__add_student_profile_faculty_number_unique_index.sql` | Adds a plain unique index on `student_profiles.faculty_number` (see [`decisions.md`](decisions.md), "Faculty number is a lookup convenience"), after normalizing every existing row. |
+| V9 | `V9__add_grade_type.sql` | Adds `grades.grade_type` (`NOT NULL`, `CHECK` against the `GradeType` enum), backfilling existing rows to `REGULAR`/`RETAKE` by reproducing the frontend's old first-in-semester-and-subject-wins ordering rule in SQL. |
+| V10 | `V10__add_audit_log.sql` | Creates `audit_log`, indexes on `created_at DESC` and `event_type`. |
+| V11 | `V11__add_subjects.sql` | Creates `subjects` (`UNIQUE(name, active)`) and `subject_teacher_assignments` (`UNIQUE(subject_id, teacher_id, group_number)`). |
+| V12 | `V12__add_users_demo_column.sql` | Adds `users.is_demo` (`NOT NULL`, default `FALSE`) for `RestrictedDemoAccountSeeder`. |
 
 ## Seeding
 
@@ -144,3 +207,7 @@ since legacy/unattributable rows can still be `NULL`.
   one they're currently enrolled in — ~400 `grades` rows total for the fixed seed), and a
   handful of `calendar_events`. Local/test use only, see
   [`decisions.md`](decisions.md).
+* `RestrictedDemoAccountSeeder` — every startup, in every environment, seeds exactly two
+  `is_demo=true` accounts (`teacher@uni-sofia.bg`, `student@uni-sofia.bg`) and resets them
+  to `enabled=true`/unlocked on every restart. See [`decisions.md`](decisions.md),
+  "Restricted demo accounts".

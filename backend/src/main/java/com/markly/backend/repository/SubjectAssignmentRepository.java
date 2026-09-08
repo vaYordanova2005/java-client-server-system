@@ -19,4 +19,7 @@ public interface SubjectAssignmentRepository extends JpaRepository<SubjectAssign
 
     /** Hard-delete guard — see {@code AdminSubjectController#deleteSubjectPermanently}. */
     boolean existsBySubject(Subject subject);
+
+    /** The other side of the same FK — hard-delete guard for {@code AdminController#deleteUser}. */
+    boolean existsByTeacher(User teacher);
 }
