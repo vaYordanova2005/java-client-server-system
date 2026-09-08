@@ -57,9 +57,8 @@ public class TeacherController {
      * grades are still recorded against the resolved account's email
      * ({@link #addGrade}), so the account identifier stays the email, per
      * documentation/decisions.md.
-     */
-    /**
-     * A demo teacher must not be able to pull a real student's name/faculty
+     *
+     * <p>A demo teacher must not be able to pull a real student's name/faculty
      * number through this lookup — the password is public by design, so
      * anyone could otherwise use it to harvest the real roster. Scoped to
      * {@code isDemo()} only; a real teacher's lookup is unchanged. Still 404,
