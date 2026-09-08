@@ -5,6 +5,7 @@ import com.markly.backend.domain.Role;
 import com.markly.backend.domain.StudentProfile;
 import com.markly.backend.domain.User;
 import com.markly.backend.repository.AuditLogRepository;
+import com.markly.backend.repository.CalendarEventRepository;
 import com.markly.backend.repository.GradeRepository;
 import com.markly.backend.repository.StudentProfileRepository;
 import com.markly.backend.repository.UserRepository;
@@ -14,6 +15,7 @@ import com.markly.backend.service.StudentProfileNormalizer;
 import com.markly.backend.service.StudentRosterService;
 import com.markly.backend.service.UserValidationService;
 import com.markly.backend.web.dto.AdminGradeResponse;
+import com.markly.backend.web.dto.AdminResetPasswordRequest;
 import com.markly.backend.web.dto.AuditLogResponse;
 import com.markly.backend.web.dto.CreateUserRequest;
 import com.markly.backend.web.dto.PageResponse;
@@ -31,6 +33,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -56,6 +59,7 @@ public class AdminController {
     private final AuditLogRepository auditLogRepository;
     private final AuditLogService auditLogService;
     private final ClientIpResolver clientIpResolver;
+    private final CalendarEventRepository calendarEventRepository;
 
     public AdminController(
             UserRepository userRepository,
@@ -66,7 +70,8 @@ public class AdminController {
             StudentRosterService studentRosterService,
             AuditLogRepository auditLogRepository,
             AuditLogService auditLogService,
-            ClientIpResolver clientIpResolver) {
+            ClientIpResolver clientIpResolver,
+            CalendarEventRepository calendarEventRepository) {
         this.userRepository = userRepository;
         this.userValidationService = userValidationService;
         this.passwordEncoder = passwordEncoder;
@@ -76,6 +81,7 @@ public class AdminController {
         this.auditLogRepository = auditLogRepository;
         this.auditLogService = auditLogService;
         this.clientIpResolver = clientIpResolver;
+        this.calendarEventRepository = calendarEventRepository;
     }
 
     @GetMapping("/users")
@@ -138,6 +144,68 @@ public class AdminController {
         user.setLockedUntil(null);
         user.setFailedLoginAttempts(0);
         auditLogService.record("ACCOUNT_UNLOCKED", currentAdmin.getUsername(), user.getUsername(),
+                clientIpResolver.resolve(httpRequest), null);
+        return UserResponse.from(userRepository.save(user));
+    }
+
+    /**
+     * Hard delete, guarded: blocked with 409 if the account has any grade or
+     * calendar-event history, since deleting it would silently discard that
+     * history — {@code updateUserStatus} (deactivate) is the reversible
+     * option for that case. A student's registrar profile is deleted in the
+     * same transaction as a stated, explicit part of this operation (not an
+     * incidental side effect): because {@code StudentProfile.facultyNumber}
+     * is unique (V8), this frees the deleted student's faculty number for
+     * reuse — the frontend confirm dialog says so explicitly.
+     */
+    @DeleteMapping("/users/{id}")
+    @Transactional
+    public void deleteUser(
+            @PathVariable Long id,
+            @AuthenticationPrincipal AppUserPrincipal currentAdmin,
+            HttpServletRequest httpRequest) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Няма потребител с този идентификатор"));
+        if (user.getUsername().equalsIgnoreCase(currentAdmin.getUsername())) {
+            throw new IllegalArgumentException("Не можете да изтриете собствения си акаунт");
+        }
+        if (gradeRepository.existsByStudent(user)
+                || gradeRepository.existsByTeacher(user)
+                || calendarEventRepository.existsByCreatedBy(user)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Потребителят има свързани данни (оценки или календарни събития) — деактивирайте акаунта вместо да го изтривате");
+        }
+        studentProfileRepository.findByStudent(user).ifPresent(studentProfileRepository::delete);
+        userRepository.delete(user);
+        auditLogService.record("USER_DELETED", currentAdmin.getUsername(), user.getUsername(),
+                clientIpResolver.resolve(httpRequest), "role=" + user.getRole());
+    }
+
+    /**
+     * Admin sets the new password directly, same UX as account creation —
+     * there is no email/token infrastructure in this app to deliver a reset
+     * link, so a forced-change-on-next-login flow is a reasonable fast
+     * follow, not v1 scope. The token version is bumped (invalidates any
+     * open session, same as {@link #updateUserStatus}) and any lockout is
+     * cleared, since a reset is also a legitimate way to recover a locked
+     * account.
+     */
+    @PostMapping("/users/{id}/reset-password")
+    public UserResponse resetPassword(
+            @PathVariable Long id,
+            @Valid @RequestBody AdminResetPasswordRequest request,
+            @AuthenticationPrincipal AppUserPrincipal currentAdmin,
+            HttpServletRequest httpRequest) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Няма потребител с този идентификатор"));
+        userValidationService.validatePassword(user.getUsername(), request.newPassword());
+
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+        user.setTokenVersion(user.getTokenVersion() + 1);
+        user.setLockedUntil(null);
+        user.setFailedLoginAttempts(0);
+        // Never the new password itself — only that a reset happened.
+        auditLogService.record("PASSWORD_RESET", currentAdmin.getUsername(), user.getUsername(),
                 clientIpResolver.resolve(httpRequest), null);
         return UserResponse.from(userRepository.save(user));
     }

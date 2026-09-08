@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import apiClient, { extractErrorMessage } from '../api/client';
 import { Layout } from '../routes/Layout';
 import { useAuth } from '../auth/useAuth';
 import { useAuditLog, type AuditLogFilters } from '../hooks/useAuditLog';
+import { ConfirmDeleteButton } from '../components/ConfirmDeleteButton';
 import type { Role, StudentProfileSummary, UserSummary } from '../types';
 
 type ProfileFormState = {
@@ -99,6 +100,63 @@ export function AdminDashboard() {
       setError(extractErrorMessage(err));
     } finally {
       setStatusPendingId(null);
+    }
+  };
+
+  // Delete confirm/pending state, same shape as ConfirmDeleteButton's other
+  // usages (JournalPage/StudentsPage), plus a dedicated error slot since a
+  // blocked delete (409, has grade/calendar history) is a routine, expected
+  // outcome the admin needs to see inline, not just in the shared banner.
+  const [deleteConfirmingId, setDeleteConfirmingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleRequestDelete = (id: number) => {
+    setDeleteError(null);
+    setDeleteConfirmingId(id);
+  };
+  const handleCancelDelete = () => setDeleteConfirmingId(null);
+  const handleConfirmDelete = async (id: number) => {
+    setDeleteError(null);
+    setDeletingId(id);
+    try {
+      await apiClient.delete(`/admin/users/${id}`);
+      setDeleteConfirmingId(null);
+      reloadUsers();
+    } catch (err) {
+      setDeleteError(extractErrorMessage(err));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const [resetPasswordForId, setResetPasswordForId] = useState<number | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [resetPasswordSubmitting, setResetPasswordSubmitting] = useState(false);
+  const [resetPasswordError, setResetPasswordError] = useState<string | null>(null);
+  const [resetPasswordSuccess, setResetPasswordSuccess] = useState<string | null>(null);
+
+  const startResetPassword = (id: number) => {
+    setResetPasswordForId(id);
+    setResetPasswordValue('');
+    setResetPasswordError(null);
+    setResetPasswordSuccess(null);
+  };
+  const cancelResetPassword = () => setResetPasswordForId(null);
+
+  const handleResetPassword = async (event: FormEvent, target: UserSummary) => {
+    event.preventDefault();
+    setResetPasswordError(null);
+    setResetPasswordSubmitting(true);
+    try {
+      await apiClient.post(`/admin/users/${target.id}/reset-password`, { newPassword: resetPasswordValue });
+      setResetPasswordSuccess(`Паролата на ${target.username} е сменена`);
+      setResetPasswordForId(null);
+      setResetPasswordValue('');
+    } catch (err) {
+      setResetPasswordError(extractErrorMessage(err));
+    } finally {
+      setResetPasswordSubmitting(false);
     }
   };
 
@@ -290,38 +348,92 @@ export function AdminDashboard() {
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.id}</td>
-                  <td>{u.username}</td>
-                  <td>{u.role}</td>
-                  <td>
-                    {!u.enabled ? 'Деактивиран' : u.locked ? 'Временно заключен' : 'Активен'}
-                  </td>
-                  <td className="user-actions">
-                    {u.username !== user?.username && (
-                      <button
-                        type="button"
-                        onClick={() => handleToggleStatus(u)}
-                        disabled={statusPendingId === u.id}
-                      >
-                        {u.enabled ? 'Деактивирай' : 'Активирай'}
-                      </button>
-                    )}
-                    {u.locked && u.enabled && (
-                      <button
-                        type="button"
-                        onClick={() => handleUnlock(u)}
-                        disabled={statusPendingId === u.id}
-                      >
-                        Отключи
-                      </button>
-                    )}
-                  </td>
-                </tr>
+                <Fragment key={u.id}>
+                  <tr>
+                    <td>{u.id}</td>
+                    <td>{u.username}</td>
+                    <td>{u.role}</td>
+                    <td>
+                      {!u.enabled ? 'Деактивиран' : u.locked ? 'Временно заключен' : 'Активен'}
+                    </td>
+                    <td className="user-actions">
+                      {u.username !== user?.username && (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(u)}
+                          disabled={statusPendingId === u.id}
+                        >
+                          {u.enabled ? 'Деактивирай' : 'Активирай'}
+                        </button>
+                      )}
+                      {u.locked && u.enabled && (
+                        <button
+                          type="button"
+                          onClick={() => handleUnlock(u)}
+                          disabled={statusPendingId === u.id}
+                        >
+                          Отключи
+                        </button>
+                      )}
+                      {u.username !== user?.username && (
+                        <button type="button" onClick={() => startResetPassword(u.id)}>
+                          Смени парола
+                        </button>
+                      )}
+                      {u.username !== user?.username && (
+                        <ConfirmDeleteButton
+                          id={u.id}
+                          confirmingDeleteId={deleteConfirmingId}
+                          deletingId={deletingId}
+                          onRequestDelete={handleRequestDelete}
+                          onCancelDelete={handleCancelDelete}
+                          onConfirmDelete={handleConfirmDelete}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                  {(deleteConfirmingId === u.id || resetPasswordForId === u.id) && (
+                    <tr>
+                      <td colSpan={5}>
+                        {deleteConfirmingId === u.id && (
+                          <p className="error">
+                            {u.role === 'STUDENT'
+                              ? 'Изтриването премахва и регистрационния профил на студента — факултетният номер ще стане свободен за повторно ползване.'
+                              : 'Това действие е необратимо.'}
+                          </p>
+                        )}
+                        {resetPasswordForId === u.id && (
+                          <form className="inline-form" onSubmit={(e) => handleResetPassword(e, u)}>
+                            <label>
+                              Нова парола
+                              <input
+                                type="password"
+                                value={resetPasswordValue}
+                                onChange={(e) => setResetPasswordValue(e.target.value)}
+                                required
+                              />
+                            </label>
+                            <button type="submit" disabled={resetPasswordSubmitting}>
+                              {resetPasswordSubmitting ? 'Записване...' : 'Смени'}
+                            </button>
+                            <button type="button" onClick={cancelResetPassword}>
+                              Отказ
+                            </button>
+                          </form>
+                        )}
+                        {resetPasswordForId === u.id && resetPasswordError && (
+                          <p className="error">{resetPasswordError}</p>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
         )}
+        {deleteError && <p className="error">{deleteError}</p>}
+        {resetPasswordSuccess && <p className="success">{resetPasswordSuccess}</p>}
       </section>
 
       <section className="card">

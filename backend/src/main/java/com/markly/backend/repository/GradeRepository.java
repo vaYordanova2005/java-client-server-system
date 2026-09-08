@@ -42,4 +42,9 @@ public interface GradeRepository extends JpaRepository<Grade, Long> {
      */
     @Query("select g from Grade g left join fetch g.student left join fetch g.teacher order by g.createdAt desc")
     List<Grade> findAllByOrderByCreatedAtDesc();
+
+    /** Delete guards: a user with any grade history must be deactivated, not deleted — see {@code AdminController#deleteUser}. */
+    boolean existsByStudent(User student);
+
+    boolean existsByTeacher(User teacher);
 }
