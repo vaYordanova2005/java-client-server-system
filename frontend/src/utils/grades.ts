@@ -105,6 +105,31 @@ export function semesterAverages<T extends { semester: number; grade: number }>(
     .sort((a, b) => a.semester - b.semester);
 }
 
+export interface KeyedAverage {
+  key: string;
+  avg: number;
+  count: number;
+}
+
+/**
+ * Generic counterpart to {@link subjectAverages}/{@link semesterAverages}:
+ * the admin statistics page breaks grades down by faculty, specialty, and
+ * group — three different string keys on the same {@code AdminGradeSummary}
+ * shape — so a single by-any-key-that-groups-cleanly-into-a-string helper
+ * covers all three instead of three near-identical copies.
+ */
+export function averagesByKey<T extends { grade: number }>(items: T[], key: (item: T) => string): KeyedAverage[] {
+  return [...groupBy(items, key).entries()]
+    .map(([k, entries]) => ({
+      key: k,
+      // groupBy only ever creates a bucket by pushing to it, so `entries` is
+      // never empty here — average() only returns null for `[]`.
+      avg: average(entries.map((e) => e.grade))!,
+      count: entries.length,
+    }))
+    .sort((a, b) => b.avg - a.avg);
+}
+
 type Recorded = Pick<GradeSummary, 'id' | 'createdAt'>;
 
 /**

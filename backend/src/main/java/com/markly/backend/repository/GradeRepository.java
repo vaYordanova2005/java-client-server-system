@@ -2,6 +2,8 @@ package com.markly.backend.repository;
 
 import com.markly.backend.domain.Grade;
 import com.markly.backend.domain.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -33,4 +35,23 @@ public interface GradeRepository extends JpaRepository<Grade, Long> {
      */
     @Query("select g from Grade g left join fetch g.student where g.id = :id and g.teacher = :teacher")
     Optional<Grade> findByIdAndTeacher(@Param("id") Long id, @Param("teacher") User teacher);
+
+    /**
+     * System-wide, for the admin journal/statistics views — unlike the two
+     * queries above, both {@code student} and {@code teacher} are fetched
+     * eagerly, since {@code AdminGradeResponse} reads both associations and
+     * {@code open-in-view} is disabled. Paginated: both {@code student} and
+     * {@code teacher} are {@code @ManyToOne} (to-one), so the fetch joins
+     * don't multiply rows and Spring Data can page this safely — a separate
+     * {@code countQuery} is required regardless, since it can't derive one
+     * from a {@code @Query} with fetch joins on its own.
+     */
+    @Query(value = "select g from Grade g left join fetch g.student left join fetch g.teacher order by g.createdAt desc",
+            countQuery = "select count(g) from Grade g")
+    Page<Grade> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    /** Delete guards: a user with any grade history must be deactivated, not deleted — see {@code AdminController#deleteUser}. */
+    boolean existsByStudent(User student);
+
+    boolean existsByTeacher(User teacher);
 }

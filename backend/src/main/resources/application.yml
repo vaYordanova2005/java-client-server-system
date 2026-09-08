@@ -30,6 +30,16 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
 
+spring.servlet.multipart:
+  # Only the admin CSV bulk-import endpoint accepts file uploads, and its
+  # rows are plaintext username/password lines — a few hundred KB is
+  # generous. Spring Boot's own default (1MB/file, 10MB/request) is small
+  # enough that an admin importing a large-but-legitimate roster could hit
+  # it and get a raw MaxUploadSizeExceededException -> 500 instead of the
+  # friendly per-row error the endpoint is meant to give.
+  max-file-size: 2MB
+  max-request-size: 2MB
+
 app:
   jwt:
     secret: ${JWT_SECRET}

@@ -9,6 +9,7 @@ import com.markly.backend.repository.StudentProfileRepository;
 import com.markly.backend.repository.UserRepository;
 import com.markly.backend.security.AppUserPrincipal;
 import com.markly.backend.service.StudentProfileNormalizer;
+import com.markly.backend.service.StudentRosterService;
 import com.markly.backend.web.dto.CreateGradeRequest;
 import com.markly.backend.web.dto.GradeResponse;
 import com.markly.backend.web.dto.StudentLookupResponse;
@@ -21,7 +22,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,14 +34,17 @@ public class TeacherController {
     private final UserRepository userRepository;
     private final GradeRepository gradeRepository;
     private final StudentProfileRepository studentProfileRepository;
+    private final StudentRosterService studentRosterService;
 
     public TeacherController(
             UserRepository userRepository,
             GradeRepository gradeRepository,
-            StudentProfileRepository studentProfileRepository) {
+            StudentProfileRepository studentProfileRepository,
+            StudentRosterService studentRosterService) {
         this.userRepository = userRepository;
         this.gradeRepository = gradeRepository;
         this.studentProfileRepository = studentProfileRepository;
+        this.studentRosterService = studentRosterService;
     }
 
     /**
@@ -93,19 +96,12 @@ public class TeacherController {
      * students); if the roster grows into the thousands or the lack of
      * per-teacher scoping becomes a real privacy concern, this needs
      * pagination and/or a teacher-group mapping to filter by, not a
-     * band-aid on this method.
+     * band-aid on this method. Shared with the admin roster
+     * ({@code AdminController}) via {@link StudentRosterService}.
      */
     @GetMapping("/students")
     public List<StudentRosterResponse> allStudents() {
-        List<User> students = userRepository.findByRole(Role.STUDENT);
-        Map<Long, StudentProfile> profilesByStudentId = students.isEmpty()
-                ? Map.of()
-                : studentProfileRepository.findByStudentIn(students).stream()
-                        .collect(Collectors.toMap(p -> p.getStudent().getId(), p -> p));
-        return students.stream()
-                .map(s -> StudentRosterResponse.from(s, profilesByStudentId.get(s.getId())))
-                .sorted(Comparator.comparing(StudentRosterResponse::studentUsername, String.CASE_INSENSITIVE_ORDER))
-                .toList();
+        return studentRosterService.allStudents();
     }
 
     /**

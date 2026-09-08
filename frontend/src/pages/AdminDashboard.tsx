@@ -1,8 +1,11 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { Fragment, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import apiClient, { extractErrorMessage } from '../api/client';
 import { Layout } from '../routes/Layout';
 import { useAuth } from '../auth/useAuth';
-import type { Role, StudentProfileSummary, UserSummary } from '../types';
+import { useAdminUsers } from '../hooks/useAdminUsers';
+import { useAuditLog, type AuditLogFilters } from '../hooks/useAuditLog';
+import { ConfirmDeleteButton } from '../components/ConfirmDeleteButton';
+import type { ImportUsersResponse, Role, StudentProfileSummary, UserSummary } from '../types';
 
 type ProfileFormState = {
   degreeLevel: string;
@@ -53,13 +56,24 @@ function toFormState(profile: StudentProfileSummary): ProfileFormState {
 
 export function AdminDashboard() {
   const { user } = useAuth();
-  const [users, setUsers] = useState<UserSummary[]>([]);
   const [role, setRole] = useState<Role>('STUDENT');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  const [usersPage, setUsersPage] = useState(0);
+  const { result: usersResult, error: usersError, loading: usersLoading, reload: reloadUsers } = useAdminUsers(usersPage);
+  const users = usersResult.content;
+
+  const [auditEventType, setAuditEventType] = useState('');
+  const [auditInvolving, setAuditInvolving] = useState('');
+  const [auditPage, setAuditPage] = useState(0);
+  const auditFilters: AuditLogFilters = useMemo(
+    () => ({ eventType: auditEventType || undefined, involving: auditInvolving || undefined }),
+    [auditEventType, auditInvolving]
+  );
+  const { result: auditResult, error: auditError, loading: auditLoading } = useAuditLog(auditFilters, auditPage);
 
   const [profileUsername, setProfileUsername] = useState('');
   const [profileForm, setProfileForm] = useState<ProfileFormState | null>(null);
@@ -67,13 +81,6 @@ export function AdminDashboard() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
-
-  // The list is refetched by bumping this rather than by calling a loader
-  // function from the effect: a loader that sets state synchronously makes
-  // React render twice on mount, and a late response could overwrite a newer
-  // one — the `ignore` flag below rules that out.
-  const [usersToken, setUsersToken] = useState(0);
-  const reloadUsers = () => setUsersToken((token) => token + 1);
 
   // Which row currently has a status call in flight, so only that row's
   // buttons are disabled rather than the whole table.
@@ -92,6 +99,63 @@ export function AdminDashboard() {
     }
   };
 
+  // Delete confirm/pending state, same shape as ConfirmDeleteButton's other
+  // usages (JournalPage/StudentsPage), plus a dedicated error slot since a
+  // blocked delete (409, has grade/calendar history) is a routine, expected
+  // outcome the admin needs to see inline, not just in the shared banner.
+  const [deleteConfirmingId, setDeleteConfirmingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleRequestDelete = (id: number) => {
+    setDeleteError(null);
+    setDeleteConfirmingId(id);
+  };
+  const handleCancelDelete = () => setDeleteConfirmingId(null);
+  const handleConfirmDelete = async (id: number) => {
+    setDeleteError(null);
+    setDeletingId(id);
+    try {
+      await apiClient.delete(`/admin/users/${id}`);
+      setDeleteConfirmingId(null);
+      reloadUsers();
+    } catch (err) {
+      setDeleteError(extractErrorMessage(err));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const [resetPasswordForId, setResetPasswordForId] = useState<number | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [resetPasswordSubmitting, setResetPasswordSubmitting] = useState(false);
+  const [resetPasswordError, setResetPasswordError] = useState<string | null>(null);
+  const [resetPasswordSuccess, setResetPasswordSuccess] = useState<string | null>(null);
+
+  const startResetPassword = (id: number) => {
+    setResetPasswordForId(id);
+    setResetPasswordValue('');
+    setResetPasswordError(null);
+    setResetPasswordSuccess(null);
+  };
+  const cancelResetPassword = () => setResetPasswordForId(null);
+
+  const handleResetPassword = async (event: FormEvent, target: UserSummary) => {
+    event.preventDefault();
+    setResetPasswordError(null);
+    setResetPasswordSubmitting(true);
+    try {
+      await apiClient.post(`/admin/users/${target.id}/reset-password`, { newPassword: resetPasswordValue });
+      setResetPasswordSuccess(`Паролата на ${target.username} е сменена`);
+      setResetPasswordForId(null);
+      setResetPasswordValue('');
+    } catch (err) {
+      setResetPasswordError(extractErrorMessage(err));
+    } finally {
+      setResetPasswordSubmitting(false);
+    }
+  };
+
   const handleUnlock = async (target: UserSummary) => {
     setError(null);
     setStatusPendingId(target.id);
@@ -104,25 +168,6 @@ export function AdminDashboard() {
       setStatusPendingId(null);
     }
   };
-
-  useEffect(() => {
-    let ignore = false;
-    apiClient.get<UserSummary[]>('/admin/users').then(
-      (response) => {
-        if (ignore) return;
-        setUsers(response.data);
-        setLoading(false);
-      },
-      (err) => {
-        if (ignore) return;
-        setError(extractErrorMessage(err));
-        setLoading(false);
-      }
-    );
-    return () => {
-      ignore = true;
-    };
-  }, [usersToken]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -137,6 +182,33 @@ export function AdminDashboard() {
       setError(extractErrorMessage(err));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importResult, setImportResult] = useState<ImportUsersResponse | null>(null);
+  const [importSubmitting, setImportSubmitting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const handleImport = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!importFile) return;
+    setImportError(null);
+    setImportResult(null);
+    setImportSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', importFile);
+      // No manual Content-Type: the browser sets the multipart boundary
+      // itself when the body is a FormData instance.
+      const response = await apiClient.post<ImportUsersResponse>('/admin/users/import', formData);
+      setImportResult(response.data);
+      setImportFile(null);
+      reloadUsers();
+    } catch (err) {
+      setImportError(extractErrorMessage(err));
+    } finally {
+      setImportSubmitting(false);
     }
   };
 
@@ -230,6 +302,57 @@ export function AdminDashboard() {
       </section>
 
       <section className="card">
+        <h2>Импорт на потребители от CSV</h2>
+        <p>Колони: <code>role,username,password</code> (role е STUDENT или TEACHER).</p>
+        <form onSubmit={handleImport} className="inline-form">
+          <label>
+            Файл
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+              required
+            />
+          </label>
+          <button type="submit" disabled={importSubmitting || !importFile}>
+            {importSubmitting ? 'Качване...' : 'Импортирай'}
+          </button>
+        </form>
+        {importError && <p className="error">{importError}</p>}
+        {importResult && (
+          <>
+            <p className="success">
+              Създадени: {importResult.created}, пропуснати: {importResult.skipped}
+            </p>
+            {importResult.results.length > 0 && (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ред</th>
+                    <th>Потребител</th>
+                    <th>Резултат</th>
+                    <th>Съобщение</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importResult.results.map((r) => (
+                    <tr key={r.rowNumber}>
+                      <td>{r.rowNumber}</td>
+                      <td>{r.username}</td>
+                      <td className={r.status === 'SKIPPED' ? 'error' : 'success'}>
+                        {r.status === 'CREATED' ? 'Създаден' : 'Пропуснат'}
+                      </td>
+                      <td>{r.message ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
+        )}
+      </section>
+
+      <section className="card">
         <h2>Профил на студент</h2>
         <form onSubmit={handleLoadProfile} className="inline-form">
           <label>
@@ -265,8 +388,10 @@ export function AdminDashboard() {
 
       <section className="card">
         <h2>Потребители</h2>
-        {loading ? (
+        {usersLoading ? (
           <p>Зареждане...</p>
+        ) : usersError ? (
+          <p className="error">{usersError}</p>
         ) : (
           <table>
             <thead>
@@ -280,37 +405,185 @@ export function AdminDashboard() {
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.id}</td>
-                  <td>{u.username}</td>
-                  <td>{u.role}</td>
-                  <td>
-                    {!u.enabled ? 'Деактивиран' : u.locked ? 'Временно заключен' : 'Активен'}
-                  </td>
-                  <td className="user-actions">
-                    {u.username !== user?.username && (
-                      <button
-                        type="button"
-                        onClick={() => handleToggleStatus(u)}
-                        disabled={statusPendingId === u.id}
-                      >
-                        {u.enabled ? 'Деактивирай' : 'Активирай'}
-                      </button>
-                    )}
-                    {u.locked && u.enabled && (
-                      <button
-                        type="button"
-                        onClick={() => handleUnlock(u)}
-                        disabled={statusPendingId === u.id}
-                      >
-                        Отключи
-                      </button>
-                    )}
-                  </td>
-                </tr>
+                <Fragment key={u.id}>
+                  <tr>
+                    <td>{u.id}</td>
+                    <td>{u.username}</td>
+                    <td>{u.role}</td>
+                    <td>
+                      {!u.enabled ? 'Деактивиран' : u.locked ? 'Временно заключен' : 'Активен'}
+                    </td>
+                    <td className="user-actions">
+                      {u.username !== user?.username && (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(u)}
+                          disabled={statusPendingId === u.id}
+                        >
+                          {u.enabled ? 'Деактивирай' : 'Активирай'}
+                        </button>
+                      )}
+                      {u.locked && u.enabled && (
+                        <button
+                          type="button"
+                          onClick={() => handleUnlock(u)}
+                          disabled={statusPendingId === u.id}
+                        >
+                          Отключи
+                        </button>
+                      )}
+                      {u.username !== user?.username && (
+                        <button type="button" onClick={() => startResetPassword(u.id)}>
+                          Смени парола
+                        </button>
+                      )}
+                      {u.username !== user?.username && (
+                        <ConfirmDeleteButton
+                          id={u.id}
+                          confirmingDeleteId={deleteConfirmingId}
+                          deletingId={deletingId}
+                          onRequestDelete={handleRequestDelete}
+                          onCancelDelete={handleCancelDelete}
+                          onConfirmDelete={handleConfirmDelete}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                  {(deleteConfirmingId === u.id || resetPasswordForId === u.id) && (
+                    <tr>
+                      <td colSpan={5}>
+                        {deleteConfirmingId === u.id && (
+                          <p className="error">
+                            {u.role === 'STUDENT'
+                              ? 'Изтриването премахва и регистрационния профил на студента — факултетният номер ще стане свободен за повторно ползване.'
+                              : 'Това действие е необратимо.'}
+                          </p>
+                        )}
+                        {resetPasswordForId === u.id && (
+                          <form className="inline-form" onSubmit={(e) => handleResetPassword(e, u)}>
+                            <label>
+                              Нова парола
+                              <input
+                                type="password"
+                                value={resetPasswordValue}
+                                onChange={(e) => setResetPasswordValue(e.target.value)}
+                                required
+                              />
+                            </label>
+                            <button type="submit" disabled={resetPasswordSubmitting}>
+                              {resetPasswordSubmitting ? 'Записване...' : 'Смени'}
+                            </button>
+                            <button type="button" onClick={cancelResetPassword}>
+                              Отказ
+                            </button>
+                          </form>
+                        )}
+                        {resetPasswordForId === u.id && resetPasswordError && (
+                          <p className="error">{resetPasswordError}</p>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
+        )}
+        {!usersLoading && !usersError && (
+          <div className="user-actions">
+            <button type="button" disabled={usersPage === 0} onClick={() => setUsersPage((p) => p - 1)}>
+              Предишна
+            </button>
+            <span>
+              Страница {usersResult.page + 1} от {Math.max(usersResult.totalPages, 1)}
+            </span>
+            <button
+              type="button"
+              disabled={usersPage + 1 >= usersResult.totalPages}
+              onClick={() => setUsersPage((p) => p + 1)}
+            >
+              Следваща
+            </button>
+          </div>
+        )}
+        {deleteError && <p className="error">{deleteError}</p>}
+        {resetPasswordSuccess && <p className="success">{resetPasswordSuccess}</p>}
+      </section>
+
+      <section className="card">
+        <h2>Одит лог</h2>
+        <form className="inline-form" onSubmit={(e) => e.preventDefault()}>
+          <label>
+            Тип събитие
+            <input
+              value={auditEventType}
+              onChange={(e) => {
+                setAuditEventType(e.target.value);
+                setAuditPage(0);
+              }}
+              placeholder="напр. ACCOUNT_STATUS_CHANGED"
+            />
+          </label>
+          <label>
+            Участник (извършил или засегнат)
+            <input
+              value={auditInvolving}
+              onChange={(e) => {
+                setAuditInvolving(e.target.value);
+                setAuditPage(0);
+              }}
+              placeholder="имейл"
+            />
+          </label>
+        </form>
+        {auditLoading && <p>Зареждане...</p>}
+        {auditError && <p className="error">{auditError}</p>}
+        {!auditLoading && !auditError && (
+          <>
+            {auditResult.content.length === 0 ? (
+              <p>Няма събития, отговарящи на филтъра.</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Дата</th>
+                    <th>Тип</th>
+                    <th>Извършено от</th>
+                    <th>Засяга</th>
+                    <th>IP</th>
+                    <th>Детайли</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditResult.content.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>{new Date(entry.createdAt).toLocaleString('bg-BG')}</td>
+                      <td>{entry.eventType}</td>
+                      <td>{entry.actorUsername ?? '—'}</td>
+                      <td>{entry.targetUsername ?? '—'}</td>
+                      <td>{entry.ip ?? '—'}</td>
+                      <td>{entry.detail ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <div className="user-actions">
+              <button type="button" disabled={auditPage === 0} onClick={() => setAuditPage((p) => p - 1)}>
+                Предишна
+              </button>
+              <span>
+                Страница {auditResult.page + 1} от {Math.max(auditResult.totalPages, 1)}
+              </span>
+              <button
+                type="button"
+                disabled={auditPage + 1 >= auditResult.totalPages}
+                onClick={() => setAuditPage((p) => p + 1)}
+              >
+                Следваща
+              </button>
+            </div>
+          </>
         )}
       </section>
     </Layout>

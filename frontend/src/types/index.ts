@@ -45,6 +45,27 @@ export interface TeacherGradeSummary {
   groupNumber: string | null;
 }
 
+/**
+ * Cross-teacher counterpart to {@link TeacherGradeSummary} — mirrors the
+ * backend's `AdminGradeResponse`. Carries `teacherUsername` and `faculty` on
+ * top of the same registrar fields, since the admin journal spans every
+ * teacher and needs to say who entered a grade and group by faculty.
+ */
+export interface AdminGradeSummary {
+  id: number;
+  subject: string;
+  semester: number;
+  grade: number;
+  gradeType: GradeType;
+  createdAt: string;
+  studentUsername: string;
+  teacherUsername: string | null;
+  facultyNumber: string | null;
+  faculty: string | null;
+  specialty: string | null;
+  groupNumber: string | null;
+}
+
 export type CalendarEventType = 'TEST' | 'HOLIDAY' | 'EVENT';
 
 export interface CalendarEventSummary {
@@ -87,6 +108,53 @@ export interface StudentRosterSummary {
   studentUsername: string;
   facultyNumber: string | null;
   specialty: string | null;
+  groupNumber: string | null;
+}
+
+export interface AuditLogEntry {
+  id: number;
+  eventType: string;
+  actorUsername: string | null;
+  targetUsername: string | null;
+  ip: string | null;
+  detail: string | null;
+  createdAt: string;
+}
+
+/** Mirrors the backend's plain-record `PageResponse<T>`. */
+export interface PageResponse<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+export interface ImportUserRowResult {
+  rowNumber: number;
+  username: string;
+  status: 'CREATED' | 'SKIPPED';
+  message: string | null;
+}
+
+export interface ImportUsersResponse {
+  results: ImportUserRowResult[];
+  created: number;
+  skipped: number;
+}
+
+export interface Subject {
+  id: number;
+  name: string;
+  faculty: string | null;
+  specialty: string | null;
+  active: boolean;
+}
+
+export interface SubjectTeacherAssignment {
+  id: number;
+  teacherUsername: string;
+  /** {@code null} means the assignment covers every group. */
   groupNumber: string | null;
 }
 

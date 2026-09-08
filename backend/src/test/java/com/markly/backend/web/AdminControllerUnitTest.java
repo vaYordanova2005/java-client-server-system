@@ -3,8 +3,15 @@ package com.markly.backend.web;
 import com.markly.backend.domain.Role;
 import com.markly.backend.domain.StudentProfile;
 import com.markly.backend.domain.User;
+import com.markly.backend.repository.AuditLogRepository;
+import com.markly.backend.repository.CalendarEventRepository;
+import com.markly.backend.repository.GradeRepository;
 import com.markly.backend.repository.StudentProfileRepository;
 import com.markly.backend.repository.UserRepository;
+import com.markly.backend.security.ClientIpResolver;
+import com.markly.backend.service.AuditLogService;
+import com.markly.backend.service.StudentRosterService;
+import com.markly.backend.service.UserImportService;
 import com.markly.backend.service.UserValidationService;
 import com.markly.backend.web.dto.UpsertStudentProfileRequest;
 import org.hibernate.exception.ConstraintViolationException;
@@ -47,9 +54,26 @@ class AdminControllerUnitTest {
     private PasswordEncoder passwordEncoder;
     @Mock
     private StudentProfileRepository studentProfileRepository;
+    @Mock
+    private GradeRepository gradeRepository;
+    @Mock
+    private StudentRosterService studentRosterService;
+    @Mock
+    private AuditLogRepository auditLogRepository;
+    @Mock
+    private AuditLogService auditLogService;
+    @Mock
+    private ClientIpResolver clientIpResolver;
+    @Mock
+    private CalendarEventRepository calendarEventRepository;
+    @Mock
+    private UserImportService userImportService;
 
     private AdminController controller() {
-        return new AdminController(userRepository, userValidationService, passwordEncoder, studentProfileRepository);
+        return new AdminController(
+                userRepository, userValidationService, passwordEncoder, studentProfileRepository,
+                gradeRepository, studentRosterService, auditLogRepository, auditLogService, clientIpResolver,
+                calendarEventRepository, userImportService);
     }
 
     private UpsertStudentProfileRequest request(String username, String facultyNumber) {

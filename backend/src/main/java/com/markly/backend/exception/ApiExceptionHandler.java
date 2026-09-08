@@ -13,6 +13,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
@@ -88,6 +89,24 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiError("Нямате достъп за това действие"));
+    }
+
+    /**
+     * The base class already maps this exception (like
+     * {@link #handleMethodArgumentNotValid}, a plain
+     * {@code @ExceptionHandler(MaxUploadSizeExceededException.class)} method
+     * would collide with its existing mapping and fail at startup with an
+     * "Ambiguous @ExceptionHandler" error), but its default body is an
+     * English {@code ProblemDetail}. Overriding it is what turns a CSV
+     * import over the configured limit (see {@code application.yml}'s
+     * {@code spring.servlet.multipart} settings) into a friendly 400
+     * instead of a raw {@code MaxUploadSizeExceededException} — a 500 the
+     * admin can't act on.
+     */
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+            MaxUploadSizeExceededException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        return ResponseEntity.badRequest().body(new ApiError("Файлът е твърде голям"));
     }
 
     @ExceptionHandler(ResponseStatusException.class)
