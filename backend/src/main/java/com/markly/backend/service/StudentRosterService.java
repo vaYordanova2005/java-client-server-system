@@ -32,7 +32,15 @@ public class StudentRosterService {
     }
 
     public List<StudentRosterResponse> allStudents() {
-        List<User> students = userRepository.findByRole(Role.STUDENT);
+        return build(userRepository.findByRole(Role.STUDENT));
+    }
+
+    /** The demo teacher's view of {@link #allStudents()} — real students must never appear in it. */
+    public List<StudentRosterResponse> demoStudents() {
+        return build(userRepository.findByRole(Role.STUDENT).stream().filter(User::isDemo).toList());
+    }
+
+    private List<StudentRosterResponse> build(List<User> students) {
         Map<Long, StudentProfile> profilesByStudentId = students.isEmpty()
                 ? Map.of()
                 : studentProfileRepository.findByStudentIn(students).stream()

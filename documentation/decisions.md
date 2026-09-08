@@ -159,6 +159,46 @@ assume a missing edit/delete endpoint is a bug to silently "fix."
   they're currently enrolled in (~400 `grades` rows total for the fixed random seed)
 * A handful of `calendar_events` (one test per subject, a holiday, a career-day event)
 
+These are ordinary accounts pre-loaded with data — nothing stops them from writing.
+
+## Restricted demo accounts
+
+`RestrictedDemoAccountSeeder` seeds exactly two accounts, unconditionally, in every
+environment including production (no `SEED_DEMO_DATA` gate, same as the real admin):
+`teacher@uni-sofia.bg` and `student@uni-sofia.bg`, both flagged `users.is_demo`. This is a
+distinct, deliberate decision from the bulk demo data above:
+
+* **Read is normal, write is always blocked.** `JwtAuthenticationFilter` rejects every
+  non-GET/HEAD/OPTIONS request from a demo account with a friendly message, except
+  `POST /api/auth/logout`. This is enforced once, centrally, independent of role — it would
+  also block a demo *admin* if one ever existed, but see below, one never does.
+* **The demo teacher's reads are scoped, the demo student's are not.** `StudentController`
+  only ever returns the caller's own data, so nothing extra was needed there. `TeacherController`
+  normally exposes the *entire* student directory (`GET /students`, `/students/lookup`) by
+  design — a real teacher needs that reach. A demo teacher does not: since the demo password
+  is public, leaving those endpoints open would let anyone harvest real students' names and
+  faculty numbers. Both are scoped to `isDemo()` students only when the caller is a demo
+  teacher (`StudentRosterService.demoStudents()`); a real teacher's view is unchanged.
+* **Calendar is a deliberate exception.** `GET /api/calendar/events` stays unfiltered for
+  demo accounts — calendar entries (exam dates, sessions, holidays) are institutional, not
+  student PII, so there's no leak analogous to the roster/lookup case above.
+* **No demo admin, anywhere.** The only admin account is the one created via
+  `SEED_ADMIN_USERNAME`/`SEED_ADMIN_PASSWORD`; nobody else knows that password by design.
+* **A public password means lockout must be exempted, not just writes.** `LoginAttemptService`
+  skips the failed-attempt counter entirely for `isDemo()` accounts — otherwise anyone could
+  deliberately fail the login 5 times and lock the demo out for every other visitor. The
+  per-IP rate limiter (`LoginRateLimitFilter`) still applies.
+* **Deactivating a demo account doesn't stick.** An admin can flip `enabled=false` via
+  `PUT /api/admin/users/{id}/status`, but unlike a lockout that expires, that flag is
+  permanent until changed back — so the seeder resets `enabled=true` (and clears any lock
+  state) on every restart. This is intentional: it's the direct consequence of "always
+  available in every environment." There is currently no in-app way to durably take a demo
+  account offline; that would need a code or env change.
+* **Hard-deleting a demo account is a no-op in practice.** `DELETE /api/admin/users/{id}`
+  409s once an account has grade history, same as for any account, and the seeder gives
+  both demo accounts a few `Grade` rows on first run — so after that, neither is deletable
+  through the panel. Not a special case, just a consequence of the existing guard.
+
 ## Passwords
 
 **All accounts (admin, all teachers, all students) use the same password:
