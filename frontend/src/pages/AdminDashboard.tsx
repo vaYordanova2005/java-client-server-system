@@ -1,7 +1,8 @@
-import { Fragment, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { Fragment, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import apiClient, { extractErrorMessage } from '../api/client';
 import { Layout } from '../routes/Layout';
 import { useAuth } from '../auth/useAuth';
+import { useAdminUsers } from '../hooks/useAdminUsers';
 import { useAuditLog, type AuditLogFilters } from '../hooks/useAuditLog';
 import { ConfirmDeleteButton } from '../components/ConfirmDeleteButton';
 import type { ImportUsersResponse, Role, StudentProfileSummary, UserSummary } from '../types';
@@ -55,13 +56,15 @@ function toFormState(profile: StudentProfileSummary): ProfileFormState {
 
 export function AdminDashboard() {
   const { user } = useAuth();
-  const [users, setUsers] = useState<UserSummary[]>([]);
   const [role, setRole] = useState<Role>('STUDENT');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  const [usersPage, setUsersPage] = useState(0);
+  const { result: usersResult, error: usersError, loading: usersLoading, reload: reloadUsers } = useAdminUsers(usersPage);
+  const users = usersResult.content;
 
   const [auditEventType, setAuditEventType] = useState('');
   const [auditInvolving, setAuditInvolving] = useState('');
@@ -78,13 +81,6 @@ export function AdminDashboard() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
-
-  // The list is refetched by bumping this rather than by calling a loader
-  // function from the effect: a loader that sets state synchronously makes
-  // React render twice on mount, and a late response could overwrite a newer
-  // one — the `ignore` flag below rules that out.
-  const [usersToken, setUsersToken] = useState(0);
-  const reloadUsers = () => setUsersToken((token) => token + 1);
 
   // Which row currently has a status call in flight, so only that row's
   // buttons are disabled rather than the whole table.
@@ -172,25 +168,6 @@ export function AdminDashboard() {
       setStatusPendingId(null);
     }
   };
-
-  useEffect(() => {
-    let ignore = false;
-    apiClient.get<UserSummary[]>('/admin/users').then(
-      (response) => {
-        if (ignore) return;
-        setUsers(response.data);
-        setLoading(false);
-      },
-      (err) => {
-        if (ignore) return;
-        setError(extractErrorMessage(err));
-        setLoading(false);
-      }
-    );
-    return () => {
-      ignore = true;
-    };
-  }, [usersToken]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -411,8 +388,10 @@ export function AdminDashboard() {
 
       <section className="card">
         <h2>Потребители</h2>
-        {loading ? (
+        {usersLoading ? (
           <p>Зареждане...</p>
+        ) : usersError ? (
+          <p className="error">{usersError}</p>
         ) : (
           <table>
             <thead>
@@ -509,6 +488,23 @@ export function AdminDashboard() {
               ))}
             </tbody>
           </table>
+        )}
+        {!usersLoading && !usersError && (
+          <div className="user-actions">
+            <button type="button" disabled={usersPage === 0} onClick={() => setUsersPage((p) => p - 1)}>
+              Предишна
+            </button>
+            <span>
+              Страница {usersResult.page + 1} от {Math.max(usersResult.totalPages, 1)}
+            </span>
+            <button
+              type="button"
+              disabled={usersPage + 1 >= usersResult.totalPages}
+              onClick={() => setUsersPage((p) => p + 1)}
+            >
+              Следваща
+            </button>
+          </div>
         )}
         {deleteError && <p className="error">{deleteError}</p>}
         {resetPasswordSuccess && <p className="success">{resetPasswordSuccess}</p>}

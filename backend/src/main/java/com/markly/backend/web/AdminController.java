@@ -31,7 +31,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -53,6 +55,16 @@ public class AdminController {
 
     /** Name of the unique index from V8, matched below to scope the DataIntegrityViolationException catch. */
     private static final String FACULTY_NUMBER_UNIQUE_INDEX = "idx_student_profiles_faculty_number";
+
+    /**
+     * Content types actually seen in the wild for a CSV export, across
+     * browsers/OSes/Excel — there is no single standard one. Checked only as
+     * a fallback when the filename itself doesn't end in {@code .csv} (see
+     * {@link #validateImportFile}), since content type is client-supplied and
+     * easy to get wrong (or spoof) on its own.
+     */
+    private static final Set<String> ALLOWED_IMPORT_CONTENT_TYPES =
+            Set.of("text/csv", "application/csv", "application/vnd.ms-excel", "text/plain");
 
     private final UserRepository userRepository;
     private final UserValidationService userValidationService;
@@ -91,11 +103,20 @@ public class AdminController {
         this.userImportService = userImportService;
     }
 
+    /**
+     * Paginated (unlike {@code /audit-log}'s filters, there's nothing to
+     * narrow this by yet) so the admin roster stays a bounded query as the
+     * user base grows, rather than one unbounded {@code SELECT *} whose
+     * response only gets bigger over time. Newest-first, same as the audit
+     * log: a freshly created account then shows up on page 0 instead of the
+     * last page, without the frontend having to track/jump to it after a
+     * create.
+     */
     @GetMapping("/users")
-    public List<UserResponse> listUsers() {
-        return userRepository.findAll().stream()
-                .map(UserResponse::from)
-                .toList();
+    public PageResponse<UserResponse> listUsers(
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size) {
+        Page<User> users = userRepository.findAll(PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id")));
+        return PageResponse.from(users, UserResponse::from);
     }
 
     @PostMapping("/users")
@@ -124,6 +145,7 @@ public class AdminController {
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal AppUserPrincipal currentAdmin,
             HttpServletRequest httpRequest) throws IOException {
+        validateImportFile(file);
         ImportUsersResponse response = userImportService.importUsers(file.getInputStream());
         // Never row contents, usernames, or the uploaded filename — only the
         // aggregate counts, since the file is user-supplied and may contain
@@ -131,6 +153,30 @@ public class AdminController {
         auditLogService.record("USERS_IMPORTED", currentAdmin.getUsername(), null,
                 clientIpResolver.resolve(httpRequest), "created=" + response.created() + " skipped=" + response.skipped());
         return response;
+    }
+
+    /**
+     * Rejects obviously-not-a-CSV uploads before they ever reach {@link
+     * UserImportService}'s parser, which otherwise has no reason to expect
+     * anything but well-formed CSV text and would surface garbage input (an
+     * image, an archive, ...) as a raw parse exception -> 500 instead of a
+     * friendly 400. File *size* is deliberately not re-checked here — {@code
+     * spring.servlet.multipart.max-file-size} (see {@code application.yml})
+     * already bounds it, and {@link com.markly.backend.exception.ApiExceptionHandler}
+     * already turns a breach into the same friendly 400.
+     */
+    private void validateImportFile(MultipartFile file) {
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("Файлът е празен");
+        }
+        String filename = file.getOriginalFilename();
+        boolean hasCsvExtension = filename != null && filename.toLowerCase(Locale.ROOT).endsWith(".csv");
+        String contentType = file.getContentType();
+        boolean hasAllowedContentType =
+                contentType != null && ALLOWED_IMPORT_CONTENT_TYPES.contains(contentType.toLowerCase(Locale.ROOT));
+        if (!hasCsvExtension && !hasAllowedContentType) {
+            throw new IllegalArgumentException("Очаква се CSV файл (.csv)");
+        }
     }
 
     /**
@@ -266,22 +312,24 @@ public class AdminController {
 
     /**
      * System-wide grades, across every teacher and student — the admin
-     * counterpart to {@code TeacherController#myGrades}. Deliberately
-     * unpaginated, consistent with that endpoint's own per-teacher list; fine
-     * at this app's current scale, but the first endpoint likely to need
-     * pagination if the dataset grows.
+     * counterpart to {@code TeacherController#myGrades}. Paginated (unlike
+     * that per-teacher list, whose scope is bounded by definition): the
+     * frontend's journal/statistics views aggregate over every admin grade,
+     * so they page through this themselves and concatenate rather than
+     * receiving that aggregation pre-computed here — but each individual
+     * request/query this endpoint makes now stays bounded regardless of how
+     * large the overall dataset grows.
      */
     @GetMapping("/grades")
-    public List<AdminGradeResponse> allGrades() {
-        List<Grade> grades = gradeRepository.findAllByOrderByCreatedAtDesc();
-        Set<User> students = grades.stream().map(Grade::getStudent).collect(Collectors.toSet());
+    public PageResponse<AdminGradeResponse> allGrades(
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size) {
+        Page<Grade> grades = gradeRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size));
+        Set<User> students = grades.getContent().stream().map(Grade::getStudent).collect(Collectors.toSet());
         Map<Long, StudentProfile> profilesByStudentId = students.isEmpty()
                 ? Map.of()
                 : studentProfileRepository.findByStudentIn(students).stream()
                         .collect(Collectors.toMap(p -> p.getStudent().getId(), p -> p));
-        return grades.stream()
-                .map(g -> AdminGradeResponse.from(g, profilesByStudentId.get(g.getStudent().getId())))
-                .toList();
+        return PageResponse.from(grades, g -> AdminGradeResponse.from(g, profilesByStudentId.get(g.getStudent().getId())));
     }
 
     @GetMapping("/students/profile")

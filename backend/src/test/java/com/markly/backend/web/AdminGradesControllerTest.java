@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -83,11 +84,11 @@ class AdminGradesControllerTest {
         saveGrade(student, teacherA, "Програмиране", 1, 6);
         saveGrade(student, teacherB, "Обща физика", 1, 4);
 
-        mockMvc.perform(get("/api/admin/grades").with(user(new AppUserPrincipal(admin))))
+        mockMvc.perform(get("/api/admin/grades").param("size", "1000").with(user(new AppUserPrincipal(admin))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].teacherUsername",
+                .andExpect(jsonPath("$.content[*].teacherUsername",
                         hasItem(teacherA.getUsername())))
-                .andExpect(jsonPath("$[*].teacherUsername",
+                .andExpect(jsonPath("$.content[*].teacherUsername",
                         hasItem(teacherB.getUsername())));
     }
 
@@ -95,12 +96,24 @@ class AdminGradesControllerTest {
     void allGradesCarriesTheTeacherUsername() throws Exception {
         Grade grade = saveGrade(student, teacherA, "Програмиране", 1, 6);
 
-        mockMvc.perform(get("/api/admin/grades").with(user(new AppUserPrincipal(admin))))
+        mockMvc.perform(get("/api/admin/grades").param("size", "1000").with(user(new AppUserPrincipal(admin))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id == " + grade.getId() + ")].teacherUsername",
+                .andExpect(jsonPath("$.content[?(@.id == " + grade.getId() + ")].teacherUsername",
                         hasItem(teacherA.getUsername())))
-                .andExpect(jsonPath("$[?(@.id == " + grade.getId() + ")].studentUsername",
+                .andExpect(jsonPath("$.content[?(@.id == " + grade.getId() + ")].studentUsername",
                         hasItem(student.getUsername())));
+    }
+
+    @Test
+    void allGradesIsPaginated() throws Exception {
+        saveGrade(student, teacherA, "Програмиране", 1, 6);
+        saveGrade(student, teacherB, "Обща физика", 1, 4);
+
+        mockMvc.perform(get("/api/admin/grades").param("page", "0").param("size", "1").with(user(new AppUserPrincipal(admin))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.size").value(1))
+                .andExpect(jsonPath("$.totalElements", greaterThanOrEqualTo(2)));
     }
 
     @Test

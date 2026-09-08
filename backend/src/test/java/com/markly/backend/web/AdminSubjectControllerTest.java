@@ -126,6 +126,33 @@ class AdminSubjectControllerTest {
                 .andExpect(jsonPath("$[?(@.id == " + id + ")].active").value(org.hamcrest.Matchers.contains(false)));
     }
 
+    // --- hard delete ---
+
+    @Test
+    void hardDeleteRemovesASubjectWithNoAssignments() throws Exception {
+        Subject subject = saveSubject(uniqueName(), true);
+
+        mockMvc.perform(delete("/api/admin/subjects/" + subject.getId() + "/permanent")
+                        .with(user(new AppUserPrincipal(admin))))
+                .andExpect(status().isNoContent());
+        createdSubjectIds.remove(subject.getId());
+
+        assertTrue(subjectRepository.findById(subject.getId()).isEmpty());
+    }
+
+    @Test
+    void hardDeleteIsBlockedWithConflictWhenAssignmentsExist() throws Exception {
+        Subject subject = saveSubject(uniqueName(), true);
+        SubjectAssignment assignment = subjectAssignmentRepository.save(new SubjectAssignment(subject, teacher, null));
+        createdAssignmentIds.add(assignment.getId());
+
+        mockMvc.perform(delete("/api/admin/subjects/" + subject.getId() + "/permanent")
+                        .with(user(new AppUserPrincipal(admin))))
+                .andExpect(status().isConflict());
+
+        assertTrue(subjectRepository.findById(subject.getId()).isPresent());
+    }
+
     // --- reactivation flow ---
 
     @Test

@@ -16,4 +16,7 @@ public interface SubjectAssignmentRepository extends JpaRepository<SubjectAssign
     List<SubjectAssignment> findBySubjectOrderByGroupNumberAsc(@Param("subject") Subject subject);
 
     boolean existsBySubjectAndTeacherAndGroupNumber(Subject subject, User teacher, String groupNumber);
+
+    /** Hard-delete guard — see {@code AdminSubjectController#deleteSubjectPermanently}. */
+    boolean existsBySubject(Subject subject);
 }

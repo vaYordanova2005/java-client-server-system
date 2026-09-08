@@ -110,6 +110,38 @@ class AdminUserImportTest {
     }
 
     @Test
+    void rejectsAFileThatIsNeitherNamedCsvNorSentWithACsvContentType() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "users.exe", "application/octet-stream", "not a csv".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(multipart("/api/admin/users/import").file(file).with(user(new AppUserPrincipal(admin))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rejectsAnEmptyFile() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "users.csv", "text/csv", new byte[0]);
+
+        mockMvc.perform(multipart("/api/admin/users/import").file(file).with(user(new AppUserPrincipal(admin))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void acceptsACsvExtensionEvenWithAGenericContentType() throws Exception {
+        String goodUsername = "octet-" + UUID.randomUUID() + "@uni-sofia.bg";
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "users.csv", "application/octet-stream",
+                ("role,username,password\nSTUDENT," + goodUsername + ",Silna-Parola123\n").getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(multipart("/api/admin/users/import").file(file).with(user(new AppUserPrincipal(admin))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.created").value(1));
+
+        User created = userRepository.findByUsernameIgnoreCase(goodUsername).orElseThrow();
+        createdUserIds.add(created.getId());
+    }
+
+    @Test
     void missingExpectedHeaderIsRejectedAsBadRequest() throws Exception {
         mockMvc.perform(multipart("/api/admin/users/import")
                         .file(csvFile("a,b,c\n1,2,3\n"))

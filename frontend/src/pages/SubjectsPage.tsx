@@ -95,6 +95,26 @@ export function SubjectsPage() {
     }
   };
 
+  // --- hard delete (only possible once no assignments reference the subject —
+  // the backend answers 409 otherwise, surfaced here as toggleError since it
+  // shares the same catalog-table error slot) ---
+  const [hardDeleteConfirmingId, setHardDeleteConfirmingId] = useState<number | null>(null);
+  const [hardDeletingId, setHardDeletingId] = useState<number | null>(null);
+
+  const handleHardDelete = async (id: number) => {
+    setToggleError(null);
+    setHardDeletingId(id);
+    try {
+      await apiClient.delete(`/admin/subjects/${id}/permanent`);
+      setHardDeleteConfirmingId(null);
+      reload();
+    } catch (err) {
+      setToggleError(extractErrorMessage(err));
+    } finally {
+      setHardDeletingId(null);
+    }
+  };
+
   // --- assignments for the selected subject ---
   const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(null);
   const [assignments, setAssignments] = useState<SubjectTeacherAssignment[]>([]);
@@ -275,6 +295,16 @@ export function SubjectsPage() {
                       <button type="button" onClick={() => setSelectedSubjectId(s.id)}>
                         Разпределение
                       </button>
+                      {!s.active && (
+                        <ConfirmDeleteButton
+                          id={s.id}
+                          confirmingDeleteId={hardDeleteConfirmingId}
+                          deletingId={hardDeletingId}
+                          onRequestDelete={setHardDeleteConfirmingId}
+                          onCancelDelete={() => setHardDeleteConfirmingId(null)}
+                          onConfirmDelete={handleHardDelete}
+                        />
+                      )}
                     </td>
                   </tr>
                 )

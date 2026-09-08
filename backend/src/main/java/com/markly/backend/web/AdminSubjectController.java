@@ -94,13 +94,13 @@ public class AdminSubjectController {
     }
 
     /**
-     * Soft delete only: sets {@code active=false}, which hides the subject
-     * from pickers (frontend) but keeps it — and any assignments referencing
-     * it — in the catalog, reversible via {@link #updateSubject}. There is
-     * no hard-delete endpoint in v1; the DB's FK from
-     * {@code subject_teacher_assignments} would need explicit
-     * assignment-cleanup handling first, and soft-delete already covers the
-     * "stop offering this subject" need.
+     * Soft delete: sets {@code active=false}, which hides the subject from
+     * pickers (frontend) but keeps it — and any assignments referencing it —
+     * in the catalog, reversible via {@link #updateSubject}. This is the
+     * "stop offering this subject" action and the one the frontend's plain
+     * delete button calls; {@link #deleteSubjectPermanently} is the separate,
+     * guarded hard-delete for actually removing a subject with no
+     * assignments left.
      */
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -111,6 +111,30 @@ public class AdminSubjectController {
         subjectRepository.save(subject);
         auditLogService.record("SUBJECT_DELETED", currentAdmin.getUsername(), null,
                 clientIpResolver.resolve(httpRequest), "id=" + id);
+    }
+
+    /**
+     * Hard delete, guarded: blocked with 409 if any {@code SubjectAssignment}
+     * still references this subject, since deleting it would violate that
+     * row's FK — {@link #deactivateSubject} (soft delete) is the reversible
+     * option for that case, same relationship as {@code
+     * AdminController#deleteUser}/{@code updateUserStatus}. Kept as a
+     * separate endpoint from {@link #deactivateSubject} rather than a query
+     * param on it, since the two have different guards and different
+     * (ir)reversibility.
+     */
+    @DeleteMapping("/{id}/permanent")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteSubjectPermanently(
+            @PathVariable Long id, @AuthenticationPrincipal AppUserPrincipal currentAdmin, HttpServletRequest httpRequest) {
+        Subject subject = findSubject(id);
+        if (subjectAssignmentRepository.existsBySubject(subject)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Предметът има разпределени учители — премахнете разпределенията или само го деактивирайте");
+        }
+        subjectRepository.delete(subject);
+        auditLogService.record("SUBJECT_HARD_DELETED", currentAdmin.getUsername(), null,
+                clientIpResolver.resolve(httpRequest), "id=" + id + " name=" + subject.getName());
     }
 
     @GetMapping("/{id}/assignments")

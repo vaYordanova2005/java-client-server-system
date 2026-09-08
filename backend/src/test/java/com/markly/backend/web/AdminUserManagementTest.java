@@ -99,6 +99,28 @@ class AdminUserManagementTest {
         return saved;
     }
 
+    // --- list (paginated) ---
+
+    @Test
+    void listUsersIsPaginated() throws Exception {
+        save("student", Role.STUDENT);
+        save("student", Role.STUDENT);
+
+        mockMvc.perform(get("/api/admin/users").param("page", "0").param("size", "1")
+                        .with(user(new AppUserPrincipal(admin))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.size").value(1))
+                .andExpect(jsonPath("$.totalElements", org.hamcrest.Matchers.greaterThanOrEqualTo(3)));
+    }
+
+    @Test
+    void listUsersRejectsNonAdminRoles() throws Exception {
+        User teacher = save("teacher", Role.TEACHER);
+        mockMvc.perform(get("/api/admin/users").with(user(new AppUserPrincipal(teacher))))
+                .andExpect(status().isForbidden());
+    }
+
     // --- delete ---
 
     @Test
