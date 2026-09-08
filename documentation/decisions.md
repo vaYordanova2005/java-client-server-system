@@ -19,8 +19,9 @@ in `legacy/` (the old TCP socket version, unmaintained, do not touch).
   digits (validated with a regex in `UserValidationService`)
 * **Student** — any valid email, no domain restriction
 
-Password for both roles: **at least 5 characters**, no format restrictions (not EGN, not
-digits-only).
+Password for both roles: subject to the password policy in "Brute-force protection and
+password rules" below — at least 10 characters, an upper-case letter, a lower-case letter
+and a digit, not a common password, and not containing the username's local part.
 
 ## Faculty number is a lookup convenience, not an identifier
 
@@ -138,16 +139,28 @@ password is required, the new one goes through the same policy, and the token ve
 bumped so every other session ends while the calling tab gets a fresh cookie. This is
 also the only way to rotate the seeded admin password from inside the app.
 
-## No self-service or admin account management beyond create
+## Admin account management
 
-An admin can list users (`GET /api/admin/users`) and create one
-(`POST /api/admin/users`) — that's the entire user-management surface. An admin can also
-deactivate/reactivate an account (`PUT /api/admin/users/{id}/status`) and lift a
-brute-force lockout (`POST /api/admin/users/{id}/unlock`). There is still no edit or
-delete endpoint for an account, and no self-service password reset or change for any
-role (admin, teacher, or student) — the only way to change a password is for an admin to
-create a new account with one. This is a deliberate scope cut, not an oversight; don't
-assume a missing edit/delete endpoint is a bug to silently "fix."
+An admin can list users (`GET /api/admin/users`, paginated), create one
+(`POST /api/admin/users`), or bulk-create several from a CSV upload
+(`POST /api/admin/users/import`, `UserImportService` — one row per account as
+`role,username,password`, each validated and saved independently so one bad row doesn't
+sink the rest of the file). An admin can deactivate/reactivate an account
+(`PUT /api/admin/users/{id}/status`), lift a brute-force lockout
+(`POST /api/admin/users/{id}/unlock`), force-set a user's password
+(`POST /api/admin/users/{id}/reset-password`), or hard-delete an account
+(`DELETE /api/admin/users/{id}`, blocked with 409 if it has any grade, calendar, or
+subject-assignment history — deactivate is the reversible option for that case). There is
+still no endpoint to edit a user's username or role once created — recreate the account
+instead. Every one of these actions is written to `audit_log` (`AuditLogService`,
+`GET /api/admin/audit-log`).
+
+Self-service is narrower and separate from all of the above: `POST /api/auth/password`
+lets any signed-in user (any role) rotate their *own* password given the current one.
+Unlike the status-change and delete endpoints, `reset-password` does *not* refuse a
+self-targeting id — but an admin pointing it at themselves bumps their own token version
+and is signed out on the next request, so `/api/auth/password` (which re-issues the
+cookie) is the route for your own password.
 
 ## Demo data
 
@@ -205,11 +218,30 @@ distinct, deliberate decision from the bulk demo data above:
 
 ## Passwords
 
-**All accounts (admin, all teachers, all students) use the same password:
-`password12345`.** No exceptions. If a new account is added manually through the admin
-panel, give it the same password unless explicitly asked otherwise.
+This decision predates the password policy in "Brute-force protection and password
+rules" above and is now only half true — keep the two straight:
+
+* **Demo/seed accounts only** (the bulk `DemoDataSeeder` teachers/students and the two
+  `RestrictedDemoAccountSeeder` accounts) all share the fixed password `password12345`.
+  These are created through `UserValidationService.validateDemoPassword`, a deliberately
+  narrower check than the real policy (still enforces length, the common-password list,
+  and the username-substring rule, but *not* the character-class rule) — carved out
+  specifically because this fixed constant has no upper-case letter and would otherwise
+  fail it.
+* **Every other account is subject to the full policy**, including the seeded admin and
+  anything created through the admin panel or CSV import: at least 10 characters, an
+  upper-case letter, a lower-case letter, and a digit. `password12345` itself **fails**
+  this check (no upper-case letter) — it cannot be used as `SEED_ADMIN_PASSWORD`, nor
+  given to a teacher/student account created via `POST /api/admin/users` or the CSV
+  importer. When adding an account manually, give it any password that satisfies the
+  policy; there is no fixed default to reuse anymore.
 
 ## Admin credentials
 
-`admin` / `password12345` (see `SEED_ADMIN_USERNAME` / `SEED_ADMIN_PASSWORD` in
-`backend/.env` for the real value if someone changed it locally).
+Username `admin` by default (`SEED_ADMIN_USERNAME`). The password is whatever
+`SEED_ADMIN_PASSWORD` was set to at first startup — it has no default value and the app
+refuses to start if it doesn't satisfy the full password policy above (see
+`DataSeeder`), so it is never `password12345`. Check `backend/.env` (or whatever secrets
+store the deployment uses) for the actual value; it can be rotated afterwards from the
+profile page (`POST /api/auth/password`) or by another admin via
+`POST /api/admin/users/{id}/reset-password`.

@@ -149,11 +149,15 @@ cd backend && ./mvnw test
 cd frontend && npm test    # vitest; npm run lint and npm run build also gate CI-worthy changes
 ```
 
+Run automatically on every push/PR by [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+(backend tests, frontend lint/test/build) — run them locally first, since CI only reports
+failures after the fact.
+
 ## Roles
 
 * **Admin** → creates teacher/student accounts (teacher username: `@uni-sofia.bg` email;
-  student: any email, password at least 5 characters) and manages student registrar
-  profiles (faculty number, group, semester, etc.)
+  student: any email; password policy same as `SEED_ADMIN_PASSWORD` above) and manages
+  student registrar profiles (faculty number, group, semester, etc.)
 * **Teacher** → enters student grades by email; creates/deletes calendar events
 * **Student** → views their own grades (dashboard, journal, statistics), and a read-only
   registrar profile and calendar — see [documentation/student.md](documentation/student.md)

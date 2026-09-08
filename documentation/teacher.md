@@ -3,7 +3,7 @@
 This describes the **Teacher** role as it actually exists in the codebase today (not a
 backlog or aspiration). A teacher account is created by an admin (`POST /api/admin/users`),
 with a username that must end in `@uni-sofia.bg`; a teacher cannot self-register. See
-[student.md](../student.md) for the equivalent student-side description — the two roles
+[student.md](student.md) for the equivalent student-side description — the two roles
 share the login flow, the data-freshness cache, and the calendar.
 
 ## Login
@@ -39,7 +39,7 @@ faculty, specialty, group, enrolled semester) before any grade form is shown, so
 number surfaces before a grade is recorded against the wrong person, not after.
 
 This is a lookup convenience only — see "Faculty number is a lookup convenience, not an
-identifier" in [decisions.md](../decisions.md). The grade itself is still recorded against
+identifier" in [decisions.md](decisions.md). The grade itself is still recorded against
 the resolved student's **email**
 (`POST /api/teacher/grades`, `CreateGradeRequest.studentUsername`); faculty number never
 becomes part of the `Grade` row or any auth path. The lookup response is deliberately
@@ -91,7 +91,7 @@ using the same student-aware classification described under Journal above.
 
 ## Calendar (`/calendar`, `CalendarPage.tsx`)
 
-Same page every role sees (see the Calendar section of [student.md](../student.md)), except
+Same page every role sees (see the Calendar section of [student.md](student.md)), except
 a teacher can also create and delete events (`ADMIN`/`TEACHER` only, enforced again
 server-side in `SecurityConfig`).
 
