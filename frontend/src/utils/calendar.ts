@@ -1,4 +1,4 @@
-import type { Language } from '../i18n/translations';
+import type { Language, TranslationKey } from '../i18n/translations';
 import type { CalendarEventSummary } from '../types';
 
 const LOCALES: Record<Language, string> = { en: 'en-GB', bg: 'bg-BG' };
@@ -55,6 +55,6 @@ export function eventsOnDate(events: CalendarEventSummary[], dateKey: string): C
   return events.filter((e) => dateKey >= e.startDate && dateKey <= (e.endDate ?? e.startDate));
 }
 
-export function eventTypeLabel(type: CalendarEventSummary['type'], t: (key: string) => string): string {
+export function eventTypeLabel(type: CalendarEventSummary['type'], t: (key: TranslationKey) => string): string {
   return t(`calendarType.${type}`);
 }

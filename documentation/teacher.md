@@ -15,11 +15,13 @@ change their own password from the profile page (`POST /api/auth/password`).
 ## Navigation
 
 A teacher sees the same four top-nav sections a student does (`routes/Layout.tsx`):
-**Начало** (dashboard), **Дневник** (journal), **Статистики** (statistics), **Календар**
-(calendar), plus a profile link. Unlike a student's journal/statistics — which are always
-about their own grades — a teacher's journal/statistics are about the grades *that teacher
-has entered*, across however many students and subjects that turns out to be. An admin still
-sees "в процес на разработка" on those two routes; only STUDENT and TEACHER render real data.
+**Home** (dashboard), **Journal**, **Statistics**, **Calendar**, plus a profile link.
+The UI defaults to English and has an EN/BG toggle in the topbar
+(`i18n/LanguageContext.tsx`) — labels here are the English defaults. Unlike a student's
+journal/statistics — which are always about their own grades — a teacher's
+journal/statistics are about the grades *that teacher has entered*, across however many
+students and subjects that turns out to be. An admin's journal/statistics are system-wide,
+across every teacher's and student's grades — see [admin.md](admin.md).
 
 ## Data freshness
 
@@ -57,9 +59,9 @@ Landing page after login:
   subject field only (semester and grade persist, a convenience for entering several grades
   for the same student in a row — the same behavior the form has always had) and the recent
   list below updates immediately.
-* **Последно въведени оценки** — the 10 most recently entered grades (the backend already
-  orders by `createdAt desc`, so this is just the first 10), each with **Редактирай** /
-  **Изтрий** actions.
+* **Recently entered grades** — the 10 most recently entered grades (the backend already
+  orders by `createdAt desc`, so this is just the first 10), each with **Edit** /
+  **Delete** actions.
 
 ## Journal (`/journal`, `JournalPage.tsx`, `TeacherJournal`)
 
@@ -74,8 +76,8 @@ the student (`studentUsername::semester::subject`), not just `semester::subject`
 that, two different students' first grade in the same semester and subject would land in the
 same bucket and one would be mislabeled a retake of the other's grade.
 
-Every row has **Редактирай** (inline subject/semester/grade form,
-`PUT /api/teacher/grades/{id}`) and **Изтрий** (`DELETE /api/teacher/grades/{id}`), both
+Every row has **Edit** (inline subject/semester/grade form,
+`PUT /api/teacher/grades/{id}`) and **Delete** (`DELETE /api/teacher/grades/{id}`), both
 scoped to grades this teacher entered — attempting either on another teacher's grade answers
 404, not 403 or a filtered-out row, so the id's existence under someone else's account is
 never confirmed one way or the other.

@@ -788,3 +788,20 @@ const bg = {
 } satisfies typeof en;
 
 export const resources = { en, bg };
+
+// Every dotted path through `en` that resolves to a string (i.e. every valid
+// argument to `t()`). Arrays (calendar.months/weekdays) are read directly off
+// `resources[language]` rather than through `t()`, so they're excluded here —
+// a typo'd key is now a compile error instead of the raw key rendering on
+// screen at runtime.
+type LeafPaths<T, Prefix extends string = ''> = {
+  [K in keyof T & string]: T[K] extends string
+    ? `${Prefix}${K}`
+    : T[K] extends readonly unknown[]
+      ? never
+      : T[K] extends object
+        ? LeafPaths<T[K], `${Prefix}${K}.`>
+        : never;
+}[keyof T & string];
+
+export type TranslationKey = LeafPaths<typeof en>;

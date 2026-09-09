@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { resources, type Language } from './translations';
+import { resources, type Language, type TranslationKey } from './translations';
 import { setActiveTranslator } from './activeTranslator';
 import { LanguageContext } from './useLanguage';
 
@@ -33,7 +33,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const setLanguage = useCallback((next: Language) => setLanguageState(next), []);
 
   const t = useCallback(
-    (key: string, vars?: Record<string, string | number>) => {
+    (key: TranslationKey, vars?: Record<string, string | number>) => {
       const path = key.split('.');
       const value = resolve(resources[language], path) ?? resolve(resources.en, path);
       if (typeof value !== 'string') return key;

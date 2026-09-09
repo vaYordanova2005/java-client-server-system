@@ -1,10 +1,10 @@
 import { createContext, useContext } from 'react';
-import type { Language } from './translations';
+import type { Language, TranslationKey } from './translations';
 
 export interface LanguageContextValue {
   language: Language;
   setLanguage: (language: Language) => void;
-  t: (key: string, vars?: Record<string, string | number>) => string;
+  t: (key: TranslationKey, vars?: Record<string, string | number>) => string;
 }
 
 /**

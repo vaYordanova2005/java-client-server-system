@@ -1,4 +1,6 @@
-export type Translator = (key: string, vars?: Record<string, string | number>) => string;
+import type { TranslationKey } from './translations';
+
+export type Translator = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
 // Non-component code (the axios client, form-validation hooks) has no access
 // to the LanguageContext, so LanguageProvider keeps this module-level
@@ -9,6 +11,6 @@ export function setActiveTranslator(translator: Translator): void {
   active = translator;
 }
 
-export function translate(key: string, vars?: Record<string, string | number>): string {
+export function translate(key: TranslationKey, vars?: Record<string, string | number>): string {
   return active(key, vars);
 }

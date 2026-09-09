@@ -17,13 +17,14 @@ app.
 
 ## Navigation
 
-An admin sees **Начало** (dashboard, `/admin`, `AdminDashboard.tsx`), **Дневник** and
-**Статистики** (system-wide, read-only, across every teacher and student — the same
-pages a student/teacher gets, rendering real data for the ADMIN role too), **Предмети**
+An admin sees **Home** (dashboard, `/admin`, `AdminDashboard.tsx`), **Journal** and
+**Statistics** (system-wide, read-only, across every teacher and student — the same
+pages a student/teacher gets, rendering real data for the ADMIN role too), **Subjects**
 (`/admin/subjects`, `SubjectsPage.tsx` — the only nav item shown exclusively to ADMIN),
-and **Календар**, plus a profile link. Unlike a teacher's "Студенти" tab, an admin has no
-dedicated per-student roster page; the closest equivalent is the profile lookup form
-described below.
+and **Calendar**, plus a profile link. The UI defaults to English and has an EN/BG
+toggle in the topbar (`i18n/LanguageContext.tsx`) — labels here are the English
+defaults. Unlike a teacher's "Students" tab, an admin has no dedicated per-student
+roster page; the closest equivalent is the profile lookup form described below.
 
 ## User management (`/admin`, `AdminDashboard.tsx`)
 
@@ -41,7 +42,7 @@ the plain list, written to `audit_log`:
   (created/skipped + message); the audit log only records the aggregate counts, never row
   contents or the filename, since the uploaded file may contain plaintext passwords.
 * **List** (`GET /api/admin/users`, paginated, newest-first) — id, username, role, and
-  status (Активен / Временно заключен / Деактивиран).
+  status (Active / Temporarily locked / Disabled).
 * **Deactivate / reactivate** (`PUT /api/admin/users/{id}/status`) — the reversible
   alternative to deleting an account with history; reactivating also clears any lockout.
   An admin cannot deactivate their own account.
@@ -105,7 +106,7 @@ what to whom, when, and from which resolved client IP.
 
 ## System-wide read access
 
-An admin's **Дневник**/**Статистики** aggregate over *every* teacher's and student's
+An admin's **Journal**/**Statistics** aggregate over *every* teacher's and student's
 grades (`GET /api/admin/grades`, paginated), unlike a teacher's own-grades-only view or a
 student's own-grades-only view — the frontend pages through this endpoint itself and
 concatenates, rather than the backend pre-aggregating it. `GET /api/admin/students`

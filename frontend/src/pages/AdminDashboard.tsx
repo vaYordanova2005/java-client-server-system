@@ -8,6 +8,7 @@ import { useAuditLog, type AuditLogFilters } from '../hooks/useAuditLog';
 import { ConfirmDeleteButton } from '../components/ConfirmDeleteButton';
 import { formatDateTime } from '../utils/calendar';
 import type { ImportUsersResponse, Role, StudentProfileSummary, UserSummary } from '../types';
+import type { TranslationKey } from '../i18n/translations';
 
 type ProfileFormState = {
   degreeLevel: string;
@@ -24,7 +25,7 @@ type ProfileFormState = {
   stream: string;
 };
 
-const PROFILE_FIELD_LABELS: { key: keyof ProfileFormState; labelKey: string; type?: string }[] = [
+const PROFILE_FIELD_LABELS: { key: keyof ProfileFormState; labelKey: TranslationKey; type?: string }[] = [
   { key: 'degreeLevel', labelKey: 'profileFields.degreeLevel' },
   { key: 'facultyNumber', labelKey: 'profileFields.facultyNumber' },
   { key: 'faculty', labelKey: 'profileFields.faculty' },

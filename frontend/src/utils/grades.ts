@@ -1,4 +1,5 @@
 import type { GradeSummary, GradeType } from '../types';
+import type { TranslationKey } from '../i18n/translations';
 
 export const TOP_GRADE = 6;
 export const FAIL_GRADE = 2;
@@ -154,6 +155,6 @@ export const GRADE_TYPES: GradeType[] = ['TEST', 'ORAL_EXAM', 'CLASS_TEST', 'REG
  * data or a value added on the backend before the frontend catches up. This
  * falls back to a dash instead.
  */
-export function gradeTypeLabel(type: GradeType | null | undefined, t: (key: string) => string): string {
+export function gradeTypeLabel(type: GradeType | null | undefined, t: (key: TranslationKey) => string): string {
   return type ? t(`gradeType.${type}`) : '—';
 }

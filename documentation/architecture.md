@@ -66,7 +66,7 @@ never manual ALTERs in production.
 
 | Folder | Responsibility |
 |---|---|
-| `api/` | `client.ts` — axios wrapper, attaches the JWT to requests, normalizes error messages. `resourceCache.ts` — a small session-scoped cache for GETs shared across pages (e.g. the student's grades, read by Начало/Дневник/Статистики): entries go stale after a TTL and revalidate in the background, on the next mount and on window focus, without dropping what's already showing — including across a failed revalidation. Cleared on login/logout. |
+| `api/` | `client.ts` — axios wrapper, attaches the JWT to requests, normalizes error messages. `resourceCache.ts` — a small session-scoped cache for GETs shared across pages (e.g. the student's grades, read by Home/Journal/Statistics): entries go stale after a TTL and revalidate in the background, on the next mount and on window focus, without dropping what's already showing — including across a failed revalidation. Cleared on login/logout. |
 | `auth/` | Login state, token storage, context for the current user/role (`AuthContext.tsx` for the provider, `useAuth.ts` for the hook — split so editing the provider doesn't disable Fast Refresh). |
 | `routes/` | React Router config, `ProtectedRoute` (per-role guard), `Layout` (shared chrome — top nav, adapts which items show by role). |
 | `pages/` | Pages per role (admin panel, teacher grade entry, student dashboard/journal/statistics/profile/calendar). |

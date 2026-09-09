@@ -5,8 +5,9 @@ import { Layout } from '../routes/Layout';
 import { useLanguage } from '../i18n/useLanguage';
 import { useStudentProfile } from '../hooks/useStudentProfile';
 import type { StudentProfileSummary } from '../types';
+import type { TranslationKey } from '../i18n/translations';
 
-const PROFILE_FIELDS: { key: keyof StudentProfileSummary; labelKey: string }[] = [
+const PROFILE_FIELDS: { key: keyof StudentProfileSummary; labelKey: TranslationKey }[] = [
   { key: 'degreeLevel', labelKey: 'profileFields.degreeLevel' },
   { key: 'facultyNumber', labelKey: 'profileFields.facultyNumber' },
   { key: 'faculty', labelKey: 'profileFields.faculty' },
