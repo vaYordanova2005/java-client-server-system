@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import apiClient, { extractErrorMessage } from '../api/client';
+import { translate } from '../i18n/activeTranslator';
 import type { GradeType, TeacherGradeSummary } from '../types';
 
 /**
@@ -48,7 +49,7 @@ export function useGradeEditor(reload: () => void) {
     if (editingId === null) return;
     setEditError(null);
     if (editSemester === '' || editGrade === '') {
-      setEditError('Моля, въведете семестър и оценка.');
+      setEditError(translate('errors.missingSemesterGrade'));
       return;
     }
     setEditSubmitting(true);

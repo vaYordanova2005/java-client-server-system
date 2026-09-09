@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import apiClient, { extractErrorMessage } from '../api/client';
 import { Layout } from '../routes/Layout';
+import { useLanguage } from '../i18n/useLanguage';
 import { useSubjects } from '../hooks/useSubjects';
 import { ConfirmDeleteButton } from '../components/ConfirmDeleteButton';
 import type { Subject, SubjectTeacherAssignment } from '../types';
@@ -14,6 +15,7 @@ interface SubjectFormState {
 const EMPTY_FORM: SubjectFormState = { name: '', faculty: '', specialty: '' };
 
 export function SubjectsPage() {
+  const { t } = useLanguage();
   const { subjects, error, loading, reload } = useSubjects();
 
   // --- create ---
@@ -193,12 +195,12 @@ export function SubjectsPage() {
   const selectedSubject = subjects.find((s) => s.id === selectedSubjectId) ?? null;
 
   return (
-    <Layout title="Предмети">
+    <Layout title={t('subjects.title')}>
       <section className="card">
-        <h2>Нов предмет</h2>
+        <h2>{t('subjects.newSubjectHeading')}</h2>
         <form onSubmit={handleCreate} className="inline-form">
           <label>
-            Име
+            {t('subjects.name')}
             <input
               value={createForm.name}
               onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
@@ -206,39 +208,39 @@ export function SubjectsPage() {
             />
           </label>
           <label>
-            Факултет
+            {t('subjects.faculty')}
             <input
               value={createForm.faculty}
               onChange={(e) => setCreateForm((f) => ({ ...f, faculty: e.target.value }))}
             />
           </label>
           <label>
-            Специалност
+            {t('subjects.specialty')}
             <input
               value={createForm.specialty}
               onChange={(e) => setCreateForm((f) => ({ ...f, specialty: e.target.value }))}
             />
           </label>
           <button type="submit" disabled={createSubmitting}>
-            {createSubmitting ? 'Създаване...' : 'Създай'}
+            {createSubmitting ? t('common.creating') : t('common.create')}
           </button>
         </form>
         {createError && <p className="error">{createError}</p>}
       </section>
 
       <section className="card">
-        <h2>Каталог с предмети</h2>
-        {loading && <p>Зареждане...</p>}
+        <h2>{t('subjects.catalogHeading')}</h2>
+        {loading && <p>{t('common.loading')}</p>}
         {error && <p className="error">{error}</p>}
         {!loading && !error && (
           <table>
             <thead>
               <tr>
-                <th>Име</th>
-                <th>Факултет</th>
-                <th>Специалност</th>
-                <th>Статус</th>
-                <th>Действие</th>
+                <th>{t('subjects.colName')}</th>
+                <th>{t('subjects.colFaculty')}</th>
+                <th>{t('subjects.colSpecialty')}</th>
+                <th>{t('subjects.colStatus')}</th>
+                <th>{t('subjects.colAction')}</th>
               </tr>
             </thead>
             <tbody>
@@ -248,7 +250,7 @@ export function SubjectsPage() {
                     <td colSpan={5}>
                       <form onSubmit={(e) => handleSaveEdit(e, s)} className="inline-form">
                         <label>
-                          Име
+                          {t('subjects.name')}
                           <input
                             value={editForm.name}
                             onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
@@ -256,24 +258,24 @@ export function SubjectsPage() {
                           />
                         </label>
                         <label>
-                          Факултет
+                          {t('subjects.faculty')}
                           <input
                             value={editForm.faculty}
                             onChange={(e) => setEditForm((f) => ({ ...f, faculty: e.target.value }))}
                           />
                         </label>
                         <label>
-                          Специалност
+                          {t('subjects.specialty')}
                           <input
                             value={editForm.specialty}
                             onChange={(e) => setEditForm((f) => ({ ...f, specialty: e.target.value }))}
                           />
                         </label>
                         <button type="submit" disabled={editSubmitting}>
-                          {editSubmitting ? 'Записване...' : 'Запази'}
+                          {editSubmitting ? t('common.saving') : t('common.save')}
                         </button>
                         <button type="button" onClick={cancelEdit}>
-                          Отказ
+                          {t('common.cancel')}
                         </button>
                       </form>
                       {editError && <p className="error">{editError}</p>}
@@ -284,16 +286,16 @@ export function SubjectsPage() {
                     <td>{s.name}</td>
                     <td>{s.faculty ?? '—'}</td>
                     <td>{s.specialty ?? '—'}</td>
-                    <td>{s.active ? 'Активен' : 'Неактивен'}</td>
+                    <td>{s.active ? t('common.active') : t('common.inactive')}</td>
                     <td className="user-actions">
                       <button type="button" onClick={() => startEdit(s)}>
-                        Редактирай
+                        {t('common.edit')}
                       </button>
                       <button type="button" onClick={() => handleToggleActive(s)} disabled={togglingId === s.id}>
-                        {s.active ? 'Деактивирай' : 'Възстанови'}
+                        {s.active ? t('subjects.deactivate') : t('subjects.restore')}
                       </button>
                       <button type="button" onClick={() => setSelectedSubjectId(s.id)}>
-                        Разпределение
+                        {t('subjects.assignment')}
                       </button>
                       {!s.active && (
                         <ConfirmDeleteButton
@@ -317,10 +319,10 @@ export function SubjectsPage() {
 
       {selectedSubject && (
         <section className="card">
-          <h2>Разпределение по учители — {selectedSubject.name}</h2>
+          <h2>{t('subjects.assignmentsHeading', { subject: selectedSubject.name })}</h2>
           <form onSubmit={handleAddAssignment} className="inline-form">
             <label>
-              Имейл на учителя
+              {t('subjects.teacherEmail')}
               <input
                 type="email"
                 value={assignTeacherUsername}
@@ -329,31 +331,31 @@ export function SubjectsPage() {
               />
             </label>
             <label>
-              Група (по избор — празно означава целия предмет)
+              {t('subjects.groupOptional')}
               <input value={assignGroupNumber} onChange={(e) => setAssignGroupNumber(e.target.value)} />
             </label>
             <button type="submit" disabled={assignSubmitting}>
-              {assignSubmitting ? 'Добавяне...' : 'Добави'}
+              {assignSubmitting ? t('subjects.adding') : t('subjects.add')}
             </button>
           </form>
           {assignError && <p className="error">{assignError}</p>}
 
-          {assignmentsLoading && <p>Зареждане...</p>}
+          {assignmentsLoading && <p>{t('common.loading')}</p>}
           {assignmentsError && <p className="error">{assignmentsError}</p>}
           {!assignmentsLoading && !assignmentsError && (
             <table>
               <thead>
                 <tr>
-                  <th>Учител</th>
-                  <th>Група</th>
-                  <th>Действие</th>
+                  <th>{t('subjects.colTeacher')}</th>
+                  <th>{t('subjects.colGroup')}</th>
+                  <th>{t('subjects.colAction')}</th>
                 </tr>
               </thead>
               <tbody>
                 {assignments.map((a) => (
                   <tr key={a.id}>
                     <td>{a.teacherUsername}</td>
-                    <td>{a.groupNumber ?? 'Целия предмет'}</td>
+                    <td>{a.groupNumber ?? t('subjects.wholeSubject')}</td>
                     <td>
                       <ConfirmDeleteButton
                         id={a.id}
@@ -368,7 +370,7 @@ export function SubjectsPage() {
                 ))}
                 {assignments.length === 0 && (
                   <tr>
-                    <td colSpan={3}>Няма разпределени учители за този предмет.</td>
+                    <td colSpan={3}>{t('subjects.noAssignments')}</td>
                   </tr>
                 )}
               </tbody>

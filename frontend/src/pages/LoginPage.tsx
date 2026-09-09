@@ -2,18 +2,21 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { extractErrorMessage } from '../api/client';
+import { useLanguage } from '../i18n/useLanguage';
+import { LanguageToggle } from '../components/LanguageToggle';
 
 // Always-seeded restricted demo accounts (see RestrictedDemoAccountSeeder /
 // README "Restricted demo accounts") — the password is public by design,
 // nothing here is a secret.
 const DEMO_PASSWORD = 'password12345';
 const DEMO_ACCOUNTS = [
-  { label: 'Демо учител', username: 'teacher@uni-sofia.bg' },
-  { label: 'Демо ученик', username: 'student@uni-sofia.bg' },
+  { labelKey: 'login.demoTeacher', username: 'teacher@uni-sofia.bg' },
+  { labelKey: 'login.demoStudent', username: 'student@uni-sofia.bg' },
 ] as const;
 
 export function LoginPage() {
   const { login } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -42,6 +45,7 @@ export function LoginPage() {
 
   return (
     <div className="login-page">
+      <LanguageToggle className="login-lang-toggle" />
       <form className="login-card" onSubmit={handleSubmit}>
         <div className="login-avatar">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -54,7 +58,7 @@ export function LoginPage() {
             />
           </svg>
         </div>
-        <h1 className="login-title">Markly</h1>
+        <h1 className="login-title">{t('login.brand')}</h1>
         <label className="login-field">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <circle cx="12" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.6" />
@@ -68,7 +72,7 @@ export function LoginPage() {
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="Потребителско име"
+            placeholder={t('login.usernamePlaceholder')}
             required
             autoFocus
           />
@@ -82,14 +86,14 @@ export function LoginPage() {
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Парола"
+            placeholder={t('login.passwordPlaceholder')}
             required
           />
           <button
             type="button"
             className="login-eye-toggle"
             onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? 'Скрий паролата' : 'Покажи паролата'}
+            aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
           >
             {showPassword ? (
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -120,17 +124,15 @@ export function LoginPage() {
           className="login-forgot"
           onClick={() => setShowForgotHint((v) => !v)}
         >
-          Забравена парола?
+          {t('login.forgotPassword')}
         </button>
-        {showForgotHint && (
-          <p className="login-forgot-hint">Свържете се с администратор за възстановяване на паролата.</p>
-        )}
+        {showForgotHint && <p className="login-forgot-hint">{t('login.forgotPasswordHint')}</p>}
         {error && <p className="error">{error}</p>}
         <button type="submit" className="login-btn" disabled={submitting}>
-          {submitting ? 'Вход...' : 'Вход'}
+          {submitting ? t('login.signingIn') : t('login.signIn')}
         </button>
         <div className="login-demo-divider">
-          <span>или вижте демо</span>
+          <span>{t('login.orSeeDemo')}</span>
         </div>
         <div className="login-demo-buttons">
           {DEMO_ACCOUNTS.map((account) => (
@@ -141,7 +143,7 @@ export function LoginPage() {
               disabled={submitting}
               onClick={() => void signIn(account.username, DEMO_PASSWORD)}
             >
-              {account.label}
+              {t(account.labelKey)}
             </button>
           ))}
         </div>

@@ -115,6 +115,57 @@ body {
   text-decoration: underline;
 }
 
+.lang-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.lang-toggle button {
+  background: transparent;
+  color: var(--text);
+  border: none;
+  border-radius: 0;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  height: auto;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lang-toggle button:hover,
+.lang-toggle button:focus-visible {
+  background: rgba(62, 138, 110, 0.12);
+}
+
+.lang-toggle button.lang-toggle-active {
+  background: var(--primary);
+  color: var(--primary-contrast);
+}
+
+.login-lang-toggle {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.login-lang-toggle button {
+  color: #ffffff;
+}
+
+.login-lang-toggle button:hover,
+.login-lang-toggle button:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.login-lang-toggle button.lang-toggle-active {
+  background: #3ecfc1;
+  color: #ffffff;
+}
+
 .topnav {
   display: flex;
   flex-wrap: wrap;
@@ -336,6 +387,7 @@ td {
 }
 
 .login-page {
+  position: relative;
   min-height: 100vh;
   display: flex;
   align-items: center;

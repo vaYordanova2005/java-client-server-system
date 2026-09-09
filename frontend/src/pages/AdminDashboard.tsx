@@ -2,9 +2,11 @@ import { Fragment, useMemo, useState, type ChangeEvent, type FormEvent } from 'r
 import apiClient, { extractErrorMessage } from '../api/client';
 import { Layout } from '../routes/Layout';
 import { useAuth } from '../auth/useAuth';
+import { useLanguage } from '../i18n/useLanguage';
 import { useAdminUsers } from '../hooks/useAdminUsers';
 import { useAuditLog, type AuditLogFilters } from '../hooks/useAuditLog';
 import { ConfirmDeleteButton } from '../components/ConfirmDeleteButton';
+import { formatDateTime } from '../utils/calendar';
 import type { ImportUsersResponse, Role, StudentProfileSummary, UserSummary } from '../types';
 
 type ProfileFormState = {
@@ -22,19 +24,19 @@ type ProfileFormState = {
   stream: string;
 };
 
-const PROFILE_FIELD_LABELS: { key: keyof ProfileFormState; label: string; type?: string }[] = [
-  { key: 'degreeLevel', label: 'ОКС' },
-  { key: 'facultyNumber', label: 'Фак. номер' },
-  { key: 'faculty', label: 'Факултет' },
-  { key: 'specialty', label: 'Специалност' },
-  { key: 'studyMode', label: 'Вид обучение' },
-  { key: 'specialization', label: 'Специализация' },
-  { key: 'groupNumber', label: 'Група' },
-  { key: 'admissionType', label: 'Вид прием' },
-  { key: 'status', label: 'Състояние' },
-  { key: 'enrolledSemester', label: 'Записан семестър', type: 'number' },
-  { key: 'completedSemester', label: 'Заверен семестър', type: 'number' },
-  { key: 'stream', label: 'Поток' },
+const PROFILE_FIELD_LABELS: { key: keyof ProfileFormState; labelKey: string; type?: string }[] = [
+  { key: 'degreeLevel', labelKey: 'profileFields.degreeLevel' },
+  { key: 'facultyNumber', labelKey: 'profileFields.facultyNumber' },
+  { key: 'faculty', labelKey: 'profileFields.faculty' },
+  { key: 'specialty', labelKey: 'profileFields.specialty' },
+  { key: 'studyMode', labelKey: 'profileFields.studyMode' },
+  { key: 'specialization', labelKey: 'profileFields.specialization' },
+  { key: 'groupNumber', labelKey: 'profileFields.groupNumber' },
+  { key: 'admissionType', labelKey: 'profileFields.admissionType' },
+  { key: 'status', labelKey: 'profileFields.status' },
+  { key: 'enrolledSemester', labelKey: 'profileFields.enrolledSemester', type: 'number' },
+  { key: 'completedSemester', labelKey: 'profileFields.completedSemester', type: 'number' },
+  { key: 'stream', labelKey: 'profileFields.stream' },
 ];
 
 function toFormState(profile: StudentProfileSummary): ProfileFormState {
@@ -56,6 +58,7 @@ function toFormState(profile: StudentProfileSummary): ProfileFormState {
 
 export function AdminDashboard() {
   const { user } = useAuth();
+  const { t, language } = useLanguage();
   const [role, setRole] = useState<Role>('STUDENT');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -146,7 +149,7 @@ export function AdminDashboard() {
     setResetPasswordSubmitting(true);
     try {
       await apiClient.post(`/admin/users/${target.id}/reset-password`, { newPassword: resetPasswordValue });
-      setResetPasswordSuccess(`Паролата на ${target.username} е сменена`);
+      setResetPasswordSuccess(t('admin.users.passwordChanged', { username: target.username }));
       setResetPasswordForId(null);
       setResetPasswordValue('');
     } catch (err) {
@@ -256,7 +259,7 @@ export function AdminDashboard() {
         completedSemester: profileForm.completedSemester ? Number(profileForm.completedSemester) : null,
         stream: profileForm.stream || null,
       });
-      setProfileSuccess('Профилът е записан');
+      setProfileSuccess(t('admin.studentProfile.saved'));
     } catch (err) {
       setProfileError(extractErrorMessage(err));
     } finally {
@@ -265,19 +268,19 @@ export function AdminDashboard() {
   };
 
   return (
-    <Layout title="Admin">
+    <Layout title={t('admin.title')}>
       <section className="card">
-        <h2>Нов потребител</h2>
+        <h2>{t('admin.newUser.heading')}</h2>
         <form onSubmit={handleSubmit} className="inline-form">
           <label>
-            Роля
+            {t('admin.newUser.role')}
             <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-              <option value="STUDENT">Студент</option>
-              <option value="TEACHER">Учител</option>
+              <option value="STUDENT">{t('admin.newUser.roleStudent')}</option>
+              <option value="TEACHER">{t('admin.newUser.roleTeacher')}</option>
             </select>
           </label>
           <label>
-            {role === 'TEACHER' ? 'Имейл (@uni-sofia.bg)' : 'Имейл'}
+            {role === 'TEACHER' ? t('admin.newUser.emailTeacher') : t('admin.newUser.email')}
             <input
               type="email"
               value={username}
@@ -286,7 +289,7 @@ export function AdminDashboard() {
             />
           </label>
           <label>
-            Парола (мин. 10 символа, главна и малка буква, цифра)
+            {t('admin.newUser.passwordHint')}
             <input
               type="password"
               value={password}
@@ -295,18 +298,22 @@ export function AdminDashboard() {
             />
           </label>
           <button type="submit" disabled={submitting}>
-            {submitting ? 'Създаване...' : 'Създай'}
+            {submitting ? t('common.creating') : t('common.create')}
           </button>
         </form>
         {error && <p className="error">{error}</p>}
       </section>
 
       <section className="card">
-        <h2>Импорт на потребители от CSV</h2>
-        <p>Колони: <code>role,username,password</code> (role е STUDENT или TEACHER).</p>
+        <h2>{t('admin.import.heading')}</h2>
+        <p>
+          {t('admin.import.columnsPrefix')}
+          <code>role,username,password</code>
+          {t('admin.import.columnsSuffix')}
+        </p>
         <form onSubmit={handleImport} className="inline-form">
           <label>
-            Файл
+            {t('admin.import.file')}
             <input
               type="file"
               accept=".csv,text/csv"
@@ -315,23 +322,23 @@ export function AdminDashboard() {
             />
           </label>
           <button type="submit" disabled={importSubmitting || !importFile}>
-            {importSubmitting ? 'Качване...' : 'Импортирай'}
+            {importSubmitting ? t('admin.import.uploading') : t('admin.import.upload')}
           </button>
         </form>
         {importError && <p className="error">{importError}</p>}
         {importResult && (
           <>
             <p className="success">
-              Създадени: {importResult.created}, пропуснати: {importResult.skipped}
+              {t('admin.import.createdSkipped', { created: importResult.created, skipped: importResult.skipped })}
             </p>
             {importResult.results.length > 0 && (
               <table>
                 <thead>
                   <tr>
-                    <th>Ред</th>
-                    <th>Потребител</th>
-                    <th>Резултат</th>
-                    <th>Съобщение</th>
+                    <th>{t('admin.import.colRow')}</th>
+                    <th>{t('admin.import.colUser')}</th>
+                    <th>{t('admin.import.colResult')}</th>
+                    <th>{t('admin.import.colMessage')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -340,7 +347,7 @@ export function AdminDashboard() {
                       <td>{r.rowNumber}</td>
                       <td>{r.username}</td>
                       <td className={r.status === 'SKIPPED' ? 'error' : 'success'}>
-                        {r.status === 'CREATED' ? 'Създаден' : 'Пропуснат'}
+                        {r.status === 'CREATED' ? t('admin.import.created') : t('admin.import.skipped')}
                       </td>
                       <td>{r.message ?? '—'}</td>
                     </tr>
@@ -353,10 +360,10 @@ export function AdminDashboard() {
       </section>
 
       <section className="card">
-        <h2>Профил на студент</h2>
+        <h2>{t('admin.studentProfile.heading')}</h2>
         <form onSubmit={handleLoadProfile} className="inline-form">
           <label>
-            Имейл на студента
+            {t('admin.studentProfile.emailLabel')}
             <input
               type="email"
               value={profileUsername}
@@ -365,21 +372,21 @@ export function AdminDashboard() {
             />
           </label>
           <button type="submit" disabled={profileLoading}>
-            {profileLoading ? 'Зареждане...' : 'Зареди'}
+            {profileLoading ? t('admin.studentProfile.loading') : t('admin.studentProfile.load')}
           </button>
         </form>
         {profileError && <p className="error">{profileError}</p>}
 
         {profileForm && (
           <form onSubmit={handleSaveProfile} className="profile-edit-grid">
-            {PROFILE_FIELD_LABELS.map(({ key, label, type }) => (
+            {PROFILE_FIELD_LABELS.map(({ key, labelKey, type }) => (
               <label key={key}>
-                {label}
+                {t(labelKey)}
                 <input type={type ?? 'text'} value={profileForm[key]} onChange={updateProfileField(key)} />
               </label>
             ))}
             <button type="submit" disabled={profileSaving}>
-              {profileSaving ? 'Записване...' : 'Запази'}
+              {profileSaving ? t('common.saving') : t('common.save')}
             </button>
           </form>
         )}
@@ -387,20 +394,20 @@ export function AdminDashboard() {
       </section>
 
       <section className="card">
-        <h2>Потребители</h2>
+        <h2>{t('admin.users.heading')}</h2>
         {usersLoading ? (
-          <p>Зареждане...</p>
+          <p>{t('common.loading')}</p>
         ) : usersError ? (
           <p className="error">{usersError}</p>
         ) : (
           <table>
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Потребителско име</th>
-                <th>Роля</th>
-                <th>Статус</th>
-                <th>Действие</th>
+                <th>{t('admin.users.colId')}</th>
+                <th>{t('admin.users.colUsername')}</th>
+                <th>{t('admin.users.colRole')}</th>
+                <th>{t('admin.users.colStatus')}</th>
+                <th>{t('admin.users.colAction')}</th>
               </tr>
             </thead>
             <tbody>
@@ -411,7 +418,11 @@ export function AdminDashboard() {
                     <td>{u.username}</td>
                     <td>{u.role}</td>
                     <td>
-                      {!u.enabled ? 'Деактивиран' : u.locked ? 'Временно заключен' : 'Активен'}
+                      {!u.enabled
+                        ? t('admin.users.statusDisabled')
+                        : u.locked
+                          ? t('admin.users.statusLocked')
+                          : t('admin.users.statusActive')}
                     </td>
                     <td className="user-actions">
                       {u.username !== user?.username && (
@@ -420,7 +431,7 @@ export function AdminDashboard() {
                           onClick={() => handleToggleStatus(u)}
                           disabled={statusPendingId === u.id}
                         >
-                          {u.enabled ? 'Деактивирай' : 'Активирай'}
+                          {u.enabled ? t('admin.users.deactivate') : t('admin.users.activate')}
                         </button>
                       )}
                       {u.locked && u.enabled && (
@@ -429,12 +440,12 @@ export function AdminDashboard() {
                           onClick={() => handleUnlock(u)}
                           disabled={statusPendingId === u.id}
                         >
-                          Отключи
+                          {t('admin.users.unlock')}
                         </button>
                       )}
                       {u.username !== user?.username && (
                         <button type="button" onClick={() => startResetPassword(u.id)}>
-                          Смени парола
+                          {t('admin.users.changePassword')}
                         </button>
                       )}
                       {u.username !== user?.username && (
@@ -455,14 +466,14 @@ export function AdminDashboard() {
                         {deleteConfirmingId === u.id && (
                           <p className="error">
                             {u.role === 'STUDENT'
-                              ? 'Изтриването премахва и регистрационния профил на студента — факултетният номер ще стане свободен за повторно ползване.'
-                              : 'Това действие е необратимо.'}
+                              ? t('admin.users.deleteWarningStudent')
+                              : t('admin.users.deleteWarningOther')}
                           </p>
                         )}
                         {resetPasswordForId === u.id && (
                           <form className="inline-form" onSubmit={(e) => handleResetPassword(e, u)}>
                             <label>
-                              Нова парола
+                              {t('admin.users.newPassword')}
                               <input
                                 type="password"
                                 value={resetPasswordValue}
@@ -471,10 +482,10 @@ export function AdminDashboard() {
                               />
                             </label>
                             <button type="submit" disabled={resetPasswordSubmitting}>
-                              {resetPasswordSubmitting ? 'Записване...' : 'Смени'}
+                              {resetPasswordSubmitting ? t('common.saving') : t('admin.users.change')}
                             </button>
                             <button type="button" onClick={cancelResetPassword}>
-                              Отказ
+                              {t('common.cancel')}
                             </button>
                           </form>
                         )}
@@ -492,17 +503,15 @@ export function AdminDashboard() {
         {!usersLoading && !usersError && (
           <div className="user-actions">
             <button type="button" disabled={usersPage === 0} onClick={() => setUsersPage((p) => p - 1)}>
-              Предишна
+              {t('common.previous')}
             </button>
-            <span>
-              Страница {usersResult.page + 1} от {Math.max(usersResult.totalPages, 1)}
-            </span>
+            <span>{t('common.page', { page: usersResult.page + 1, total: Math.max(usersResult.totalPages, 1) })}</span>
             <button
               type="button"
               disabled={usersPage + 1 >= usersResult.totalPages}
               onClick={() => setUsersPage((p) => p + 1)}
             >
-              Следваща
+              {t('common.next')}
             </button>
           </div>
         )}
@@ -511,53 +520,53 @@ export function AdminDashboard() {
       </section>
 
       <section className="card">
-        <h2>Одит лог</h2>
+        <h2>{t('admin.audit.heading')}</h2>
         <form className="inline-form" onSubmit={(e) => e.preventDefault()}>
           <label>
-            Тип събитие
+            {t('admin.audit.eventType')}
             <input
               value={auditEventType}
               onChange={(e) => {
                 setAuditEventType(e.target.value);
                 setAuditPage(0);
               }}
-              placeholder="напр. ACCOUNT_STATUS_CHANGED"
+              placeholder={t('admin.audit.eventTypePlaceholder')}
             />
           </label>
           <label>
-            Участник (извършил или засегнат)
+            {t('admin.audit.involving')}
             <input
               value={auditInvolving}
               onChange={(e) => {
                 setAuditInvolving(e.target.value);
                 setAuditPage(0);
               }}
-              placeholder="имейл"
+              placeholder={t('admin.audit.involvingPlaceholder')}
             />
           </label>
         </form>
-        {auditLoading && <p>Зареждане...</p>}
+        {auditLoading && <p>{t('common.loading')}</p>}
         {auditError && <p className="error">{auditError}</p>}
         {!auditLoading && !auditError && (
           <>
             {auditResult.content.length === 0 ? (
-              <p>Няма събития, отговарящи на филтъра.</p>
+              <p>{t('admin.audit.noEvents')}</p>
             ) : (
               <table>
                 <thead>
                   <tr>
-                    <th>Дата</th>
-                    <th>Тип</th>
-                    <th>Извършено от</th>
-                    <th>Засяга</th>
-                    <th>IP</th>
-                    <th>Детайли</th>
+                    <th>{t('admin.audit.colDate')}</th>
+                    <th>{t('admin.audit.colType')}</th>
+                    <th>{t('admin.audit.colActor')}</th>
+                    <th>{t('admin.audit.colTarget')}</th>
+                    <th>{t('admin.audit.colIp')}</th>
+                    <th>{t('admin.audit.colDetail')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {auditResult.content.map((entry) => (
                     <tr key={entry.id}>
-                      <td>{new Date(entry.createdAt).toLocaleString('bg-BG')}</td>
+                      <td>{formatDateTime(new Date(entry.createdAt), language)}</td>
                       <td>{entry.eventType}</td>
                       <td>{entry.actorUsername ?? '—'}</td>
                       <td>{entry.targetUsername ?? '—'}</td>
@@ -570,17 +579,17 @@ export function AdminDashboard() {
             )}
             <div className="user-actions">
               <button type="button" disabled={auditPage === 0} onClick={() => setAuditPage((p) => p - 1)}>
-                Предишна
+                {t('common.previous')}
               </button>
               <span>
-                Страница {auditResult.page + 1} от {Math.max(auditResult.totalPages, 1)}
+                {t('common.page', { page: auditResult.page + 1, total: Math.max(auditResult.totalPages, 1) })}
               </span>
               <button
                 type="button"
                 disabled={auditPage + 1 >= auditResult.totalPages}
                 onClick={() => setAuditPage((p) => p + 1)}
               >
-                Следваща
+                {t('common.next')}
               </button>
             </div>
           </>

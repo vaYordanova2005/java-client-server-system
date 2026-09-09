@@ -1,11 +1,13 @@
 import { useMemo, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '../routes/Layout';
+import { useLanguage } from '../i18n/useLanguage';
 import { ChartIcon, JournalIcon, TrophyIcon, BooksIcon } from '../components/icons';
 import { useStudentGrades } from '../hooks/useStudentGrades';
 import { average, semesterAverages, subjectAverages, tierColor, TOP_GRADE } from '../utils/grades';
 
 export function StudentDashboard() {
+  const { t } = useLanguage();
   const { grades, error, loading } = useStudentGrades();
 
   const stats = useMemo(() => {
@@ -28,7 +30,7 @@ export function StudentDashboard() {
     <Layout>
       {loading && (
         <section className="card">
-          <p>Зареждане...</p>
+          <p>{t('common.loading')}</p>
         </section>
       )}
       {error && (
@@ -38,7 +40,7 @@ export function StudentDashboard() {
       )}
       {!loading && !error && grades.length === 0 && (
         <section className="card">
-          <p>Все още няма вписани оценки.</p>
+          <p>{t('studentDashboard.noGrades')}</p>
         </section>
       )}
 
@@ -53,34 +55,34 @@ export function StudentDashboard() {
               <ChartIcon />
               <div>
                 <strong>{stats.overallAvg.toFixed(2)}</strong>
-                <span>Успех</span>
+                <span>{t('studentDashboard.statAverage')}</span>
               </div>
             </Link>
             <Link to="/journal" className="stat-tile">
               <JournalIcon />
               <div>
                 <strong>{grades.length}</strong>
-                <span>Оценки</span>
+                <span>{t('studentDashboard.statGrades')}</span>
               </div>
             </Link>
             <div className="stat-tile" style={{ '--tile-accent': 'var(--success)' } as CSSProperties}>
               <TrophyIcon />
               <div>
                 <strong>{stats.excellentCount}</strong>
-                <span>Отлични</span>
+                <span>{t('studentDashboard.statExcellent')}</span>
               </div>
             </div>
             <div className="stat-tile">
               <BooksIcon />
               <div>
                 <strong>{stats.subjectCount}</strong>
-                <span>Предмети</span>
+                <span>{t('studentDashboard.statSubjects')}</span>
               </div>
             </div>
           </div>
 
           <section className="card">
-            <h2>Успех по предмети</h2>
+            <h2>{t('studentDashboard.bySubjectHeading')}</h2>
             <div className="subject-bars">
               {stats.subjectAverages.map(({ subject, avg, count }) => (
                 <div className="subject-bar-row" key={subject}>
@@ -101,11 +103,11 @@ export function StudentDashboard() {
 
           {stats.semesterAverages.length > 1 && (
             <section className="card">
-              <h2>Развитие по семестри</h2>
+              <h2>{t('studentDashboard.bySemesterHeading')}</h2>
               <div className="semester-trend">
                 {stats.semesterAverages.map(({ semester, avg }) => (
                   <div className="semester-pill" key={semester}>
-                    <span className="semester-pill-label">Сем. {semester}</span>
+                    <span className="semester-pill-label">{t('studentDashboard.semesterShort', { semester })}</span>
                     <span className="semester-pill-value" style={{ color: tierColor(avg) }}>
                       {avg.toFixed(2)}
                     </span>

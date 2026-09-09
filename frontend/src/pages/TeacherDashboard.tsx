@@ -1,11 +1,12 @@
 import { useMemo, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '../routes/Layout';
+import { useLanguage } from '../i18n/useLanguage';
 import { ChartIcon, JournalIcon, TrophyIcon, BooksIcon } from '../components/icons';
 import { useTeacherGrades } from '../hooks/useTeacherGrades';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import { average, byCreatedAt, FAIL_GRADE, gradeColor, groupBy, tierColor } from '../utils/grades';
-import { formatDateShort, toDateKey, TYPE_LABELS } from '../utils/calendar';
+import { eventTypeLabel, formatDateOnly, formatDateShort, toDateKey } from '../utils/calendar';
 
 const RECENT_COUNT = 5;
 const UPCOMING_COUNT = 5;
@@ -15,6 +16,7 @@ const WATCHLIST_COUNT = 6;
 const WATCHLIST_AVG_THRESHOLD = 3.5;
 
 export function TeacherDashboard() {
+  const { t, language } = useLanguage();
   const { grades, error, loading } = useTeacherGrades();
   const { events } = useCalendarEvents();
 
@@ -62,7 +64,7 @@ export function TeacherDashboard() {
     <Layout>
       {loading && (
         <section className="card">
-          <p>Зареждане...</p>
+          <p>{t('common.loading')}</p>
         </section>
       )}
       {error && (
@@ -73,7 +75,9 @@ export function TeacherDashboard() {
       {!loading && !error && grades.length === 0 && (
         <section className="card">
           <p>
-            Все още нямате въведени оценки. Започнете от <Link to="/journal">Дневника</Link>.
+            {t('teacherDashboard.noGradesPrefix')}
+            <Link to="/journal">{t('teacherDashboard.noGradesLink')}</Link>
+            {t('teacherDashboard.noGradesSuffix')}
           </p>
         </section>
       )}
@@ -89,47 +93,47 @@ export function TeacherDashboard() {
               <ChartIcon />
               <div>
                 <strong>{stats.overallAvg.toFixed(2)}</strong>
-                <span>Среден успех</span>
+                <span>{t('teacherDashboard.statAverage')}</span>
               </div>
             </Link>
             <Link to="/journal" className="stat-tile">
               <JournalIcon />
               <div>
                 <strong>{grades.length}</strong>
-                <span>Оценки</span>
+                <span>{t('teacherDashboard.statGrades')}</span>
               </div>
             </Link>
             <Link to="/students" className="stat-tile">
               <TrophyIcon />
               <div>
                 <strong>{stats.studentCount}</strong>
-                <span>Студенти</span>
+                <span>{t('teacherDashboard.statStudents')}</span>
               </div>
             </Link>
             <Link to="/statistics" className="stat-tile">
               <BooksIcon />
               <div>
                 <strong>{stats.subjectCount}</strong>
-                <span>Предмети</span>
+                <span>{t('teacherDashboard.statSubjects')}</span>
               </div>
             </Link>
           </div>
 
           <section className="card">
             <div className="card-heading">
-              <h2>Последно въведени оценки</h2>
+              <h2>{t('teacherDashboard.recentHeading')}</h2>
               <Link to="/journal" className="card-link">
-                Виж всички →
+                {t('teacherDashboard.viewAll')}
               </Link>
             </div>
             <table>
               <thead>
                 <tr>
-                  <th>Студент</th>
-                  <th>Предмет</th>
-                  <th>Сем.</th>
-                  <th>Оценка</th>
-                  <th>Дата</th>
+                  <th>{t('teacherDashboard.colStudent')}</th>
+                  <th>{t('teacherDashboard.colSubject')}</th>
+                  <th>{t('teacherDashboard.colSemester')}</th>
+                  <th>{t('teacherDashboard.colGrade')}</th>
+                  <th>{t('teacherDashboard.colDate')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -139,7 +143,7 @@ export function TeacherDashboard() {
                     <td>{g.subject}</td>
                     <td>{g.semester}</td>
                     <td>{g.grade}</td>
-                    <td>{new Date(g.createdAt).toLocaleDateString('bg-BG')}</td>
+                    <td>{formatDateOnly(new Date(g.createdAt), language)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -148,20 +152,20 @@ export function TeacherDashboard() {
 
           <section className="card">
             <div className="card-heading">
-              <h2>Нуждаят се от внимание</h2>
+              <h2>{t('teacherDashboard.watchlistHeading')}</h2>
               <Link to="/students" className="card-link">
-                Всички студенти →
+                {t('teacherDashboard.allStudents')}
               </Link>
             </div>
             {watchlist.length === 0 ? (
-              <p>Никой от студентите ви няма слаба оценка или нисък успех в момента.</p>
+              <p>{t('teacherDashboard.watchlistEmpty')}</p>
             ) : (
               <table>
                 <thead>
                   <tr>
-                    <th>Студент</th>
-                    <th>Ср. успех</th>
-                    <th>Слаби оценки по</th>
+                    <th>{t('teacherDashboard.colStudent')}</th>
+                    <th>{t('teacherDashboard.colAvg')}</th>
+                    <th>{t('teacherDashboard.colFailSubjects')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -184,13 +188,13 @@ export function TeacherDashboard() {
 
           <section className="card">
             <div className="card-heading">
-              <h2>Предстоящо в календара</h2>
+              <h2>{t('teacherDashboard.upcomingHeading')}</h2>
               <Link to="/calendar" className="card-link">
-                Целият календар →
+                {t('teacherDashboard.fullCalendar')}
               </Link>
             </div>
             {upcomingEvents.length === 0 ? (
-              <p>Няма предстоящи записи.</p>
+              <p>{t('teacherDashboard.upcomingEmpty')}</p>
             ) : (
               <ul className="calendar-event-list">
                 {upcomingEvents.map((e) => (
@@ -199,9 +203,9 @@ export function TeacherDashboard() {
                     <div>
                       <strong>{e.title}</strong>{' '}
                       <span className="calendar-event-type">
-                        ({TYPE_LABELS[e.type]}
-                        {e.subject ? ` · ${e.subject}` : ''}) · {formatDateShort(e.startDate)}
-                        {e.endDate && e.endDate !== e.startDate ? ` – ${formatDateShort(e.endDate)}` : ''}
+                        ({eventTypeLabel(e.type, t)}
+                        {e.subject ? ` · ${e.subject}` : ''}) · {formatDateShort(e.startDate, language)}
+                        {e.endDate && e.endDate !== e.startDate ? ` – ${formatDateShort(e.endDate, language)}` : ''}
                       </span>
                     </div>
                   </li>

@@ -1,4 +1,7 @@
+import type { Language } from '../i18n/translations';
 import type { CalendarEventSummary } from '../types';
+
+const LOCALES: Record<Language, string> = { en: 'en-GB', bg: 'bg-BG' };
 
 export function toDateKey(date: Date): string {
   const y = date.getFullYear();
@@ -12,12 +15,20 @@ export function parseDateKey(key: string): Date {
   return new Date(y, m - 1, d);
 }
 
-export function formatDate(key: string): string {
-  return parseDateKey(key).toLocaleDateString('bg-BG', { day: 'numeric', month: 'long', year: 'numeric' });
+export function formatDate(key: string, language: Language): string {
+  return parseDateKey(key).toLocaleDateString(LOCALES[language], { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-export function formatDateShort(key: string): string {
-  return parseDateKey(key).toLocaleDateString('bg-BG');
+export function formatDateShort(key: string, language: Language): string {
+  return parseDateKey(key).toLocaleDateString(LOCALES[language]);
+}
+
+export function formatDateTime(date: Date, language: Language): string {
+  return date.toLocaleString(LOCALES[language]);
+}
+
+export function formatDateOnly(date: Date, language: Language): string {
+  return date.toLocaleDateString(LOCALES[language]);
 }
 
 // Always 6 weeks so the grid height stays constant across months; leading/
@@ -44,15 +55,6 @@ export function eventsOnDate(events: CalendarEventSummary[], dateKey: string): C
   return events.filter((e) => dateKey >= e.startDate && dateKey <= (e.endDate ?? e.startDate));
 }
 
-export const TYPE_LABELS: Record<CalendarEventSummary['type'], string> = {
-  TEST: 'Тест',
-  HOLIDAY: 'Ваканция',
-  EVENT: 'Събитие',
-};
-
-export const MONTH_NAMES = [
-  'Януари', 'Февруари', 'Март', 'Април', 'Май', 'Юни',
-  'Юли', 'Август', 'Септември', 'Октомври', 'Ноември', 'Декември',
-];
-
-export const WEEKDAY_LABELS = ['Пон', 'Вт', 'Ср', 'Чет', 'Пет', 'Съб', 'Нед'];
+export function eventTypeLabel(type: CalendarEventSummary['type'], t: (key: string) => string): string {
+  return t(`calendarType.${type}`);
+}

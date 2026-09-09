@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { translate } from '../i18n/activeTranslator';
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api',
@@ -63,13 +64,13 @@ export function extractErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const data = error.response?.data as { message?: string } | undefined;
     if (data?.message) return data.message;
-    if (error.response?.status === 401) return 'Невалидно потребителско име или парола';
-    if (error.response?.status === 403) return 'Нямате достъп за това действие';
+    if (error.response?.status === 401) return translate('errors.invalidCredentials');
+    if (error.response?.status === 403) return translate('errors.forbidden');
     if (error.response?.status === 429) {
-      return 'Твърде много опити за вход. Опитайте отново след няколко минути.';
+      return translate('errors.tooManyAttempts');
     }
   }
-  return 'Възникна грешка. Опитайте отново.';
+  return translate('errors.generic');
 }
 
 export default apiClient;

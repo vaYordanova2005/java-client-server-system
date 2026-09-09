@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState, type FormEvent } from 'react';
 import { Layout } from '../routes/Layout';
 import { useAuth } from '../auth/useAuth';
+import { useLanguage } from '../i18n/useLanguage';
 import { useStudentGrades } from '../hooks/useStudentGrades';
 import { useStudentProfile } from '../hooks/useStudentProfile';
 import { useTeacherGrades } from '../hooks/useTeacherGrades';
@@ -12,17 +13,11 @@ import { useAddGradeForm } from '../hooks/useAddGradeForm';
 import { GradeFieldsForm } from '../components/GradeFieldsForm';
 import { ConfirmDeleteButton } from '../components/ConfirmDeleteButton';
 import { byCreatedAt, FAIL_GRADE, gradeTypeLabel, groupBy, naturalCompare } from '../utils/grades';
+import { formatDateOnly } from '../utils/calendar';
 import type { AdminGradeSummary, StudentRosterSummary } from '../types';
 
 const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
 const RECENT_COUNT = 10;
-
-/**
- * Specialty and group are optional on a student profile, so a student the
- * admin hasn't filled in a profile for yet still needs a bucket to land in —
- * same reasoning as StudentsPage.
- */
-const UNKNOWN = 'Без специалност/група';
 
 function displayValue(value: string | number | null | undefined): string | number {
   return value === null || value === undefined || value === '' ? '—' : value;
@@ -30,21 +25,23 @@ function displayValue(value: string | number | null | undefined): string | numbe
 
 export function JournalPage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
 
   if (user?.role === 'STUDENT') return <StudentJournal />;
   if (user?.role === 'TEACHER') return <TeacherJournal />;
   if (user?.role === 'ADMIN') return <AdminJournal />;
 
   return (
-    <Layout title="Дневник">
+    <Layout title={t('journal.title')}>
       <section className="card">
-        <p>Тази секция е в процес на разработка.</p>
+        <p>{t('journal.underConstruction')}</p>
       </section>
     </Layout>
   );
 }
 
 function StudentJournal() {
+  const { t, language } = useLanguage();
   const { grades, error, loading } = useStudentGrades();
   const { profile } = useStudentProfile();
   const currentSemester = profile?.enrolledSemester ?? null;
@@ -83,7 +80,7 @@ function StudentJournal() {
     <Layout>
       {loading && (
         <section className="card">
-          <p>Зареждане...</p>
+          <p>{t('common.loading')}</p>
         </section>
       )}
       {error && (
@@ -93,7 +90,7 @@ function StudentJournal() {
       )}
       {!loading && !error && grades.length === 0 && (
         <section className="card">
-          <p>Все още няма вписани оценки.</p>
+          <p>{t('journal.student.empty')}</p>
         </section>
       )}
       {!loading && !error && grades.length > 0 && (
@@ -102,13 +99,16 @@ function StudentJournal() {
             const subjectRows = bySemester.get(semester) ?? [];
             return (
               <details className="card" key={semester}>
-                <summary>Семестър {semester}{semester === currentSemester ? ' (текущ)' : ''}</summary>
+                <summary>
+                  {t('journal.student.semesterHeading', { semester })}
+                  {semester === currentSemester ? t('journal.student.current') : ''}
+                </summary>
                 {subjectRows.length ? (
                   <table>
                     <thead>
                       <tr>
-                        <th>Предмет</th>
-                        <th>Оценки</th>
+                        <th>{t('journal.student.colSubject')}</th>
+                        <th>{t('journal.student.colGrades')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -137,9 +137,15 @@ function StudentJournal() {
                                 <tr className="grade-detail-row" key={g.id}>
                                   <td colSpan={2}>
                                     <div className="grade-detail" id={`grade-detail-${g.id}`}>
-                                      <div>Дата: {new Date(g.createdAt).toLocaleDateString('bg-BG')}</div>
-                                      <div>Тип: {gradeTypeLabel(g.gradeType)}</div>
-                                      <div>Преподавател: {g.teacherUsername ?? '—'}</div>
+                                      <div>
+                                        {t('journal.student.detailDate')} {formatDateOnly(new Date(g.createdAt), language)}
+                                      </div>
+                                      <div>
+                                        {t('journal.student.detailType')} {gradeTypeLabel(g.gradeType, t)}
+                                      </div>
+                                      <div>
+                                        {t('journal.student.detailTeacher')} {g.teacherUsername ?? '—'}
+                                      </div>
                                     </div>
                                   </td>
                                 </tr>
@@ -150,7 +156,7 @@ function StudentJournal() {
                     </tbody>
                   </table>
                 ) : (
-                  <p>Няма оценки за този семестър.</p>
+                  <p>{t('journal.student.noGradesForSemester')}</p>
                 )}
               </details>
             );
@@ -162,6 +168,7 @@ function StudentJournal() {
 }
 
 function TeacherJournal() {
+  const { t } = useLanguage();
   const { grades, error: gradesError, loading: gradesLoading, reload } = useTeacherGrades();
   const {
     result: student,
@@ -207,7 +214,9 @@ function TeacherJournal() {
     const gradeAtSubmit = addForm.grade;
     const ok = await addForm.submit(student.username);
     if (ok) {
-      setSubmitSuccess(`Оценка ${gradeAtSubmit} по ${subjectAtSubmit} записана за ${student.username}`);
+      setSubmitSuccess(
+        t('journal.teacher.gradeRecorded', { grade: gradeAtSubmit, subject: subjectAtSubmit, student: student.username })
+      );
       // Subject clears so the next grade for the same student starts blank;
       // semester/grade stay as a convenience when entering several in a row.
       addForm.setSubject('');
@@ -217,15 +226,15 @@ function TeacherJournal() {
   return (
     <Layout>
       <section className="card">
-        <h2>Добави оценка</h2>
+        <h2>{t('journal.teacher.addGradeHeading')}</h2>
         {!student && (
           <form onSubmit={handleLookup} className="inline-form">
             <label>
-              Факултетен номер или имейл
+              {t('journal.teacher.lookupLabel')}
               <input value={query} onChange={(e) => setQuery(e.target.value)} required />
             </label>
             <button type="submit" disabled={lookupLoading}>
-              {lookupLoading ? 'Търсене...' : 'Провери'}
+              {lookupLoading ? t('journal.teacher.checking') : t('journal.teacher.check')}
             </button>
           </form>
         )}
@@ -235,25 +244,25 @@ function TeacherJournal() {
           <>
             <div className="profile-info-grid">
               <div className="profile-info-row">
-                <span className="profile-info-label">Имейл</span>
+                <span className="profile-info-label">{t('profileFields.email')}</span>
                 <span className="profile-info-value">{student.username}</span>
               </div>
               <div className="profile-info-row">
-                <span className="profile-info-label">Фак. номер</span>
+                <span className="profile-info-label">{t('profileFields.facultyNumber')}</span>
                 <span className="profile-info-value">{displayValue(student.facultyNumber)}</span>
               </div>
               <div className="profile-info-row">
-                <span className="profile-info-label">Специалност</span>
+                <span className="profile-info-label">{t('profileFields.specialty')}</span>
                 <span className="profile-info-value">{displayValue(student.specialty)}</span>
               </div>
               <div className="profile-info-row">
-                <span className="profile-info-label">Група</span>
+                <span className="profile-info-label">{t('profileFields.groupNumber')}</span>
                 <span className="profile-info-value">{displayValue(student.groupNumber)}</span>
               </div>
             </div>
             <p>
               <button type="button" onClick={handleChangeStudent}>
-                Смени студента
+                {t('journal.teacher.changeStudent')}
               </button>
             </p>
 
@@ -270,8 +279,8 @@ function TeacherJournal() {
               gradeType={addForm.gradeType}
               onGradeTypeChange={addForm.setGradeType}
               submitting={addForm.submitting}
-              submitLabel="Запиши"
-              submittingLabel="Записване..."
+              submitLabel={t('grades.save')}
+              submittingLabel={t('grades.saving')}
             />
           </>
         )}
@@ -280,21 +289,21 @@ function TeacherJournal() {
       </section>
 
       <details className="card">
-        <summary>Последно въведени оценки</summary>
-        {gradesLoading && <p>Зареждане...</p>}
+        <summary>{t('journal.teacher.recentHeading')}</summary>
+        {gradesLoading && <p>{t('common.loading')}</p>}
         {gradesError && <p className="error">{gradesError}</p>}
         {editor.deleteError && <p className="error">{editor.deleteError}</p>}
-        {!gradesLoading && !gradesError && recentGrades.length === 0 && <p>Все още няма въведени оценки.</p>}
+        {!gradesLoading && !gradesError && recentGrades.length === 0 && <p>{t('journal.teacher.empty')}</p>}
         {recentGrades.length > 0 && (
           <table>
             <thead>
               <tr>
-                <th>Студент</th>
-                <th>Предмет</th>
-                <th>Сем.</th>
-                <th>Оценка</th>
-                <th>Тип</th>
-                <th>Действие</th>
+                <th>{t('journal.teacher.colStudent')}</th>
+                <th>{t('journal.teacher.colSubject')}</th>
+                <th>{t('journal.teacher.colSemester')}</th>
+                <th>{t('journal.teacher.colGrade')}</th>
+                <th>{t('journal.teacher.colType')}</th>
+                <th>{t('journal.teacher.colAction')}</th>
               </tr>
             </thead>
             <tbody>
@@ -316,8 +325,8 @@ function TeacherJournal() {
                         gradeType={editor.editGradeType}
                         onGradeTypeChange={editor.setEditGradeType}
                         submitting={editor.editSubmitting}
-                        submitLabel="Запази"
-                        submittingLabel="Записване..."
+                        submitLabel={t('common.save')}
+                        submittingLabel={t('common.saving')}
                         onCancel={editor.cancelEditing}
                       />
                       {editor.editError && <p className="error">{editor.editError}</p>}
@@ -329,10 +338,10 @@ function TeacherJournal() {
                     <td>{g.subject}</td>
                     <td>{g.semester}</td>
                     <td>{g.grade}</td>
-                    <td>{gradeTypeLabel(g.gradeType)}</td>
+                    <td>{gradeTypeLabel(g.gradeType, t)}</td>
                     <td className="user-actions">
                       <button type="button" onClick={() => editor.startEditing(g)}>
-                        Редактирай
+                        {t('common.edit')}
                       </button>
                       <ConfirmDeleteButton
                         id={g.id}
@@ -368,6 +377,8 @@ interface AdminJournalStudentEntry {
  * here, they don't grade through it.
  */
 function AdminJournal() {
+  const { t } = useLanguage();
+  const UNKNOWN = t('common.unspecifiedGroup');
   const { students, error: rosterError, loading: rosterLoading } = useAdminStudentRoster();
   const { grades, error: gradesError, loading: gradesLoading } = useAdminGrades();
 
@@ -384,7 +395,7 @@ function AdminJournal() {
   const semesters = useMemo(() => [...new Set(grades.map((g) => g.semester))].sort((a, b) => a - b), [grades]);
   const specialties = useMemo(
     () => [...new Set(students.map((s) => s.specialty ?? UNKNOWN))].sort(naturalCompare),
-    [students]
+    [students, UNKNOWN]
   );
   const groupNumbers = useMemo(
     () => [
@@ -394,7 +405,7 @@ function AdminJournal() {
           .map((s) => s.groupNumber ?? UNKNOWN)
       ),
     ].sort(naturalCompare),
-    [students, specialtyFilter]
+    [students, specialtyFilter, UNKNOWN]
   );
 
   const gradesByStudent = useMemo(() => groupBy(grades, (g) => g.studentUsername), [grades]);
@@ -409,7 +420,7 @@ function AdminJournal() {
         (!specialtyFilter || (s.specialty ?? UNKNOWN) === specialtyFilter) &&
         (!groupFilter || (s.groupNumber ?? UNKNOWN) === groupFilter)
     );
-  }, [students, studentFilter, specialtyFilter, groupFilter]);
+  }, [students, studentFilter, specialtyFilter, groupFilter, UNKNOWN]);
 
   const bySpecialty = useMemo(() => {
     const studentsOf = (entries: StudentRosterSummary[]): AdminJournalStudentEntry[] =>
@@ -457,22 +468,22 @@ function AdminJournal() {
       })
       .filter((s) => s.byGroup.length > 0)
       .sort((a, b) => naturalCompare(a.specialty, b.specialty));
-  }, [filteredRoster, gradesByStudent, subjectFilter, semesterFilter]);
+  }, [filteredRoster, gradesByStudent, subjectFilter, semesterFilter, UNKNOWN]);
 
   return (
-    <Layout title="Дневник">
+    <Layout title={t('journal.title')}>
       <section className="card">
         <form className="inline-form" onSubmit={(e) => e.preventDefault()}>
           <label>
-            Студент (имейл или фак. №)
+            {t('filters.studentLabel')}
             <input
               value={studentFilter}
               onChange={(e) => setStudentFilter(e.target.value)}
-              placeholder="напр. student1@uni-sofia.bg или 62501"
+              placeholder={t('filters.studentPlaceholder')}
             />
           </label>
           <label>
-            Специалност
+            {t('filters.specialtyLabel')}
             <select
               value={specialtyFilter}
               onChange={(e) => {
@@ -480,7 +491,7 @@ function AdminJournal() {
                 setGroupFilter('');
               }}
             >
-              <option value="">Всички</option>
+              <option value="">{t('filters.allOption')}</option>
               {specialties.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -489,9 +500,9 @@ function AdminJournal() {
             </select>
           </label>
           <label>
-            Група
+            {t('filters.groupLabel')}
             <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
-              <option value="">Всички</option>
+              <option value="">{t('filters.allOption')}</option>
               {groupNumbers.map((g) => (
                 <option key={g} value={g}>
                   {g}
@@ -500,9 +511,9 @@ function AdminJournal() {
             </select>
           </label>
           <label>
-            Предмет
+            {t('filters.subjectLabel')}
             <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
-              <option value="">Всички</option>
+              <option value="">{t('filters.allOption')}</option>
               {subjects.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -511,9 +522,9 @@ function AdminJournal() {
             </select>
           </label>
           <label>
-            Семестър
+            {t('filters.semesterLabel')}
             <select value={semesterFilter} onChange={(e) => setSemesterFilter(e.target.value)}>
-              <option value="">Всички</option>
+              <option value="">{t('filters.allOption')}</option>
               {semesters.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -526,7 +537,7 @@ function AdminJournal() {
 
       {loading && (
         <section className="card">
-          <p>Зареждане...</p>
+          <p>{t('common.loading')}</p>
         </section>
       )}
       {error && (
@@ -536,36 +547,37 @@ function AdminJournal() {
       )}
       {!loading && !error && bySpecialty.length === 0 && (
         <section className="card">
-          <p>Няма студенти, отговарящи на филтъра.</p>
+          <p>{t('journal.admin.noStudents')}</p>
         </section>
       )}
 
       {bySpecialty.map(({ specialty, studentCount, byGroup }) => (
         <details className="card" key={specialty} open={bySpecialty.length === 1}>
           <summary>
-            {specialty} <small style={{ opacity: 0.6 }}>({studentCount} студенти)</small>
+            {specialty}{' '}
+            <small style={{ opacity: 0.6 }}>({t('journal.admin.studentsCount', { count: studentCount })})</small>
           </summary>
           {byGroup.map(({ groupNumber, students: groupStudents }) => (
             <details key={groupNumber} open={byGroup.length === 1}>
-              <summary>Група {groupNumber}</summary>
+              <summary>{t('journal.admin.groupHeading', { group: groupNumber })}</summary>
               {groupStudents.map(({ studentUsername, facultyNumber, bySemester }) => (
                 <details key={studentUsername} open={bySpecialty.length === 1 && byGroup.length === 1 && groupStudents.length === 1}>
                   <summary>
                     {studentUsername}
                     {facultyNumber ? <small style={{ opacity: 0.6 }}> ({facultyNumber})</small> : null}
                   </summary>
-                  {bySemester.length === 0 && <p>Няма въведени оценки.</p>}
+                  {bySemester.length === 0 && <p>{t('journal.admin.noGradesEntered')}</p>}
                   {bySemester.map(({ semester, subjectRows }) => (
                     <table key={semester}>
                       <thead>
                         <tr>
-                          <th colSpan={4}>Семестър {semester}</th>
+                          <th colSpan={4}>{t('journal.admin.semesterHeading', { semester })}</th>
                         </tr>
                         <tr>
-                          <th>Предмет</th>
-                          <th>Оценка</th>
-                          <th>Тип</th>
-                          <th>Учител</th>
+                          <th>{t('journal.admin.colSubject')}</th>
+                          <th>{t('journal.admin.colGrade')}</th>
+                          <th>{t('journal.admin.colType')}</th>
+                          <th>{t('journal.admin.colTeacher')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -574,7 +586,7 @@ function AdminJournal() {
                             <tr key={g.id}>
                               <td>{subject}</td>
                               <td className={g.grade === FAIL_GRADE ? 'grade-btn-fail' : undefined}>{g.grade}</td>
-                              <td>{gradeTypeLabel(g.gradeType)}</td>
+                              <td>{gradeTypeLabel(g.gradeType, t)}</td>
                               <td>{g.teacherUsername ?? '—'}</td>
                             </tr>
                           ))

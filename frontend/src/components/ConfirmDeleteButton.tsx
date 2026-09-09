@@ -1,3 +1,5 @@
+import { useLanguage } from '../i18n/useLanguage';
+
 interface ConfirmDeleteButtonProps {
   id: number;
   confirmingDeleteId: number | null;
@@ -31,15 +33,17 @@ export function ConfirmDeleteButton({
   className,
   confirmWrapperClassName,
 }: ConfirmDeleteButtonProps) {
+  const { t } = useLanguage();
+
   if (confirmingDeleteId === id) {
     const controls = (
       <>
-        <span>Сигурни ли сте?</span>
+        <span>{t('confirmDelete.areYouSure')}</span>
         <button type="button" className={className} onClick={() => onConfirmDelete(id)} disabled={deletingId === id}>
-          {deletingId === id ? 'Изтриване...' : 'Да, изтрий'}
+          {deletingId === id ? t('confirmDelete.deleting') : t('confirmDelete.yesDelete')}
         </button>
         <button type="button" onClick={onCancelDelete}>
-          Отказ
+          {t('common.cancel')}
         </button>
       </>
     );
@@ -47,7 +51,7 @@ export function ConfirmDeleteButton({
   }
   return (
     <button type="button" className={className} onClick={() => onRequestDelete(id)}>
-      Изтрий
+      {t('confirmDelete.delete')}
     </button>
   );
 }

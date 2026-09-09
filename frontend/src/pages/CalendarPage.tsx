@@ -1,23 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Layout } from '../routes/Layout';
 import { useAuth } from '../auth/useAuth';
+import { useLanguage } from '../i18n/useLanguage';
+import { resources } from '../i18n/translations';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import apiClient, { extractErrorMessage } from '../api/client';
 import { ConfirmDeleteButton } from '../components/ConfirmDeleteButton';
 import type { CalendarEventType } from '../types';
-import {
-  buildMonthGrid,
-  eventsOnDate,
-  formatDate,
-  formatDateShort,
-  MONTH_NAMES,
-  toDateKey,
-  TYPE_LABELS,
-  WEEKDAY_LABELS,
-} from '../utils/calendar';
+import { buildMonthGrid, eventsOnDate, eventTypeLabel, formatDate, formatDateShort, toDateKey } from '../utils/calendar';
 
 export function CalendarPage() {
   const { user } = useAuth();
+  const { t, language } = useLanguage();
+  const monthNames = resources[language].calendar.months;
+  const weekdayLabels = resources[language].calendar.weekdays;
   const canManage = user?.role === 'ADMIN' || user?.role === 'TEACHER';
   const { events, error, loading, refresh } = useCalendarEvents();
 
@@ -87,7 +83,7 @@ export function CalendarPage() {
         startDate,
         endDate: endDate || null,
       });
-      setFormSuccess('Записът е добавен в календара');
+      setFormSuccess(t('calendar.eventAdded'));
       setTitle('');
       setSubject('');
       setDescription('');
@@ -132,12 +128,12 @@ export function CalendarPage() {
     <Layout>
       <section className="card">
         <div className="calendar-header">
-          <button type="button" onClick={() => goToMonth(-1)} aria-label="Предишен месец">
+          <button type="button" onClick={() => goToMonth(-1)} aria-label={t('calendar.prevMonth')}>
             &larr;
           </button>
           <div className="calendar-month-year" ref={pickerRef}>
             <button type="button" className="calendar-my-label" onClick={() => openPicker('month')}>
-              {MONTH_NAMES[monthCursor.getMonth()]}
+              {monthNames[monthCursor.getMonth()]}
             </button>
             <button type="button" className="calendar-my-label" onClick={() => openPicker('year')}>
               {monthCursor.getFullYear()}
@@ -146,16 +142,16 @@ export function CalendarPage() {
             {picker === 'month' && (
               <div className="calendar-picker">
                 <div className="calendar-picker-nav">
-                  <button type="button" onClick={() => setPickerYear((y) => y - 1)} aria-label="Предишна година">
+                  <button type="button" onClick={() => setPickerYear((y) => y - 1)} aria-label={t('calendar.prevYear')}>
                     &larr;
                   </button>
                   <span>{pickerYear}</span>
-                  <button type="button" onClick={() => setPickerYear((y) => y + 1)} aria-label="Следваща година">
+                  <button type="button" onClick={() => setPickerYear((y) => y + 1)} aria-label={t('calendar.nextYear')}>
                     &rarr;
                   </button>
                 </div>
                 <div className="calendar-picker-grid">
-                  {MONTH_NAMES.map((name, idx) => (
+                  {monthNames.map((name, idx) => (
                     <button
                       type="button"
                       key={name}
@@ -180,13 +176,13 @@ export function CalendarPage() {
             {picker === 'year' && (
               <div className="calendar-picker">
                 <div className="calendar-picker-nav">
-                  <button type="button" onClick={() => setYearRangeStart((s) => s - 12)} aria-label="Предишни години">
+                  <button type="button" onClick={() => setYearRangeStart((s) => s - 12)} aria-label={t('calendar.prevYears')}>
                     &larr;
                   </button>
                   <span>
                     {yearRangeStart} – {yearRangeStart + 11}
                   </span>
-                  <button type="button" onClick={() => setYearRangeStart((s) => s + 12)} aria-label="Следващи години">
+                  <button type="button" onClick={() => setYearRangeStart((s) => s + 12)} aria-label={t('calendar.nextYears')}>
                     &rarr;
                   </button>
                 </div>
@@ -210,7 +206,7 @@ export function CalendarPage() {
               </div>
             )}
           </div>
-          <button type="button" onClick={() => goToMonth(1)} aria-label="Следващ месец">
+          <button type="button" onClick={() => goToMonth(1)} aria-label={t('calendar.nextMonth')}>
             &rarr;
           </button>
           <button
@@ -218,17 +214,17 @@ export function CalendarPage() {
             className="calendar-today-btn"
             onClick={() => setMonthCursor(new Date(today.getFullYear(), today.getMonth(), 1))}
           >
-            Днес
+            {t('calendar.today')}
           </button>
         </div>
 
-        {loading && <p>Зареждане...</p>}
+        {loading && <p>{t('common.loading')}</p>}
         {error && <p className="error">{error}</p>}
 
         {!loading && !error && (
           <>
             <div className="calendar-grid calendar-weekdays">
-              {WEEKDAY_LABELS.map((d) => (
+              {weekdayLabels.map((d) => (
                 <div key={d} className="calendar-weekday">
                   {d}
                 </div>
@@ -274,9 +270,9 @@ export function CalendarPage() {
 
       {selectedDateKey && (
         <section className="card">
-          <h2>{formatDate(selectedDateKey)}</h2>
+          <h2>{formatDate(selectedDateKey, language)}</h2>
           {selectedEvents.length === 0 ? (
-            <p>Няма записи за този ден.</p>
+            <p>{t('calendar.noEntriesForDay')}</p>
           ) : (
             <ul className="calendar-event-list">
               {selectedEvents.map((e) => (
@@ -285,11 +281,11 @@ export function CalendarPage() {
                   <div>
                     <strong>{e.title}</strong>{' '}
                     <span className="calendar-event-type">
-                      ({TYPE_LABELS[e.type]}
+                      ({eventTypeLabel(e.type, t)}
                       {e.subject ? ` · ${e.subject}` : ''})
                     </span>
                     {e.description && <p className="calendar-event-desc">{e.description}</p>}
-                    <p className="calendar-event-author">Добавил: {e.createdByUsername}</p>
+                    <p className="calendar-event-author">{t('calendar.addedBy', { name: e.createdByUsername })}</p>
                   </div>
                   {canManage && (
                     <ConfirmDeleteButton
@@ -312,40 +308,40 @@ export function CalendarPage() {
 
       {canManage && (
         <section className="card">
-          <h2>Добави в календара</h2>
+          <h2>{t('calendar.addHeading')}</h2>
           <form onSubmit={handleSubmit} className="inline-form">
             <label>
-              Тип
+              {t('calendar.type')}
               <select value={type} onChange={(e) => setType(e.target.value as CalendarEventType)}>
-                <option value="TEST">Тест</option>
-                <option value="HOLIDAY">Ваканция</option>
-                <option value="EVENT">Събитие</option>
+                <option value="TEST">{t('calendarType.TEST')}</option>
+                <option value="HOLIDAY">{t('calendarType.HOLIDAY')}</option>
+                <option value="EVENT">{t('calendarType.EVENT')}</option>
               </select>
             </label>
             <label>
-              Заглавие
+              {t('calendar.titleLabel')}
               <input value={title} onChange={(e) => setTitle(e.target.value)} required />
             </label>
             {type === 'TEST' && (
               <label>
-                Предмет
+                {t('calendar.subject')}
                 <input value={subject} onChange={(e) => setSubject(e.target.value)} required />
               </label>
             )}
             <label>
-              Начална дата
+              {t('calendar.startDate')}
               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
             </label>
             <label>
-              Крайна дата (по избор)
+              {t('calendar.endDate')}
               <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </label>
             <label>
-              Описание (по избор)
+              {t('calendar.description')}
               <input value={description} onChange={(e) => setDescription(e.target.value)} />
             </label>
             <button type="submit" disabled={submitting}>
-              {submitting ? 'Записване...' : 'Добави'}
+              {submitting ? t('calendar.adding') : t('calendar.add')}
             </button>
           </form>
           {formError && <p className="error">{formError}</p>}
@@ -354,9 +350,9 @@ export function CalendarPage() {
       )}
 
       <section className="card">
-        <h2>Предстоящи</h2>
+        <h2>{t('calendar.upcomingHeading')}</h2>
         {upcoming.length === 0 ? (
-          <p>Няма предстоящи записи.</p>
+          <p>{t('calendar.upcomingEmpty')}</p>
         ) : (
           <ul className="calendar-event-list">
             {upcoming.map((e) => (
@@ -365,11 +361,11 @@ export function CalendarPage() {
                 <div>
                   <strong>{e.title}</strong>{' '}
                   <span className="calendar-event-type">
-                    ({TYPE_LABELS[e.type]}
-                    {e.subject ? ` · ${e.subject}` : ''}) · {formatDateShort(e.startDate)}
-                    {e.endDate && e.endDate !== e.startDate ? ` – ${formatDateShort(e.endDate)}` : ''}
-                    {' · Добавил: '}
-                    {e.createdByUsername}
+                    ({eventTypeLabel(e.type, t)}
+                    {e.subject ? ` · ${e.subject}` : ''}) · {formatDateShort(e.startDate, language)}
+                    {e.endDate && e.endDate !== e.startDate ? ` – ${formatDateShort(e.endDate, language)}` : ''}
+                    {' · '}
+                    {t('calendar.addedBy', { name: e.createdByUsername })}
                   </span>
                 </div>
                 {canManage && (

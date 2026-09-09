@@ -1,17 +1,20 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
+import { useLanguage } from '../i18n/useLanguage';
 import { HomeIcon, JournalIcon, ChartIcon, CalendarIcon, StudentsIcon, BooksIcon } from '../components/icons';
 import { NetworkField } from '../components/NetworkField';
+import { LanguageToggle } from '../components/LanguageToggle';
 import type { Role } from '../types';
 
-// Дневник and Статистики render real data for STUDENT (own grades), TEACHER
+// Journal and Statistics render real data for STUDENT (own grades), TEACHER
 // (own-entered grades), and ADMIN (system-wide, read-only, across every
 // teacher and student).
 const ROLES_WITH_JOURNAL_AND_STATISTICS: Role[] = ['STUDENT', 'TEACHER', 'ADMIN'];
 
 export function Layout({ title, children }: { title?: string; children: ReactNode }) {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   const homePath = user ? `/${user.role.toLowerCase()}` : '/';
@@ -19,12 +22,14 @@ export function Layout({ title, children }: { title?: string; children: ReactNod
   const showStudents = user?.role === 'TEACHER';
   const showSubjects = user?.role === 'ADMIN';
   const navItems = [
-    { to: homePath, label: 'Начало', icon: HomeIcon, end: true },
-    ...(showJournalAndStatistics ? [{ to: '/journal', label: 'Дневник', icon: JournalIcon, end: false }] : []),
-    ...(showStudents ? [{ to: '/students', label: 'Студенти', icon: StudentsIcon, end: false }] : []),
-    ...(showSubjects ? [{ to: '/admin/subjects', label: 'Предмети', icon: BooksIcon, end: false }] : []),
-    ...(showJournalAndStatistics ? [{ to: '/statistics', label: 'Статистики', icon: ChartIcon, end: false }] : []),
-    { to: '/calendar', label: 'Календар', icon: CalendarIcon, end: false },
+    { to: homePath, label: t('layout.navHome'), icon: HomeIcon, end: true },
+    ...(showJournalAndStatistics ? [{ to: '/journal', label: t('layout.navJournal'), icon: JournalIcon, end: false }] : []),
+    ...(showStudents ? [{ to: '/students', label: t('layout.navStudents'), icon: StudentsIcon, end: false }] : []),
+    ...(showSubjects ? [{ to: '/admin/subjects', label: t('layout.navSubjects'), icon: BooksIcon, end: false }] : []),
+    ...(showJournalAndStatistics
+      ? [{ to: '/statistics', label: t('layout.navStatistics'), icon: ChartIcon, end: false }]
+      : []),
+    { to: '/calendar', label: t('layout.navCalendar'), icon: CalendarIcon, end: false },
   ];
 
   const handleLogout = async () => {
@@ -59,10 +64,11 @@ export function Layout({ title, children }: { title?: string; children: ReactNod
           ))}
         </nav>
         <div className="topbar-user">
+          <LanguageToggle />
           <Link to="/profile" className="topbar-username">
             {user?.username}
           </Link>
-          <button onClick={handleLogout}>Изход</button>
+          <button onClick={handleLogout}>{t('layout.logout')}</button>
         </div>
       </header>
       <main>

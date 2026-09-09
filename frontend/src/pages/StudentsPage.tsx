@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Layout } from '../routes/Layout';
+import { useLanguage } from '../i18n/useLanguage';
 import { useTeacherGrades } from '../hooks/useTeacherGrades';
 import { useAllStudents } from '../hooks/useAllStudents';
 import { useGradeEditor } from '../hooks/useGradeEditor';
@@ -9,13 +10,6 @@ import { ConfirmDeleteButton } from '../components/ConfirmDeleteButton';
 import { byCreatedAt, FAIL_GRADE, gradeTypeLabel, groupBy, naturalCompare } from '../utils/grades';
 import type { StudentRosterSummary, TeacherGradeSummary } from '../types';
 
-/**
- * Specialty and group are optional on a student profile, so a student the
- * admin hasn't filled in a profile for yet still needs a bucket to land in —
- * dropping them would hide real students (and their grades) from the page.
- */
-const UNKNOWN = 'Без специалност/група';
-
 interface StudentEntry {
   studentUsername: string;
   facultyNumber: string | null;
@@ -23,6 +17,9 @@ interface StudentEntry {
 }
 
 export function StudentsPage() {
+  const { t } = useLanguage();
+  const UNKNOWN = t('common.unspecifiedGroup');
+
   // The roster (every student, from every teacher's perspective) drives who
   // shows up on the page; `grades` (this teacher's own) is overlaid onto
   // each roster entry. Building the page from `grades` alone — as it used
@@ -48,7 +45,7 @@ export function StudentsPage() {
   const semesters = useMemo(() => [...new Set(grades.map((g) => g.semester))].sort((a, b) => a - b), [grades]);
   const specialties = useMemo(
     () => [...new Set(students.map((s) => s.specialty ?? UNKNOWN))].sort(naturalCompare),
-    [students]
+    [students, UNKNOWN]
   );
 
   // Group numbers repeat across specialties (every specialty has a group 1),
@@ -62,7 +59,7 @@ export function StudentsPage() {
           .map((s) => s.groupNumber ?? UNKNOWN)
       ),
     ].sort(naturalCompare),
-    [students, specialtyFilter]
+    [students, specialtyFilter, UNKNOWN]
   );
 
   const gradesByStudent = useMemo(() => groupBy(grades, (g) => g.studentUsername), [grades]);
@@ -79,7 +76,7 @@ export function StudentsPage() {
         (!specialtyFilter || (s.specialty ?? UNKNOWN) === specialtyFilter) &&
         (!groupFilter || (s.groupNumber ?? UNKNOWN) === groupFilter)
     );
-  }, [students, studentFilter, specialtyFilter, groupFilter]);
+  }, [students, studentFilter, specialtyFilter, groupFilter, UNKNOWN]);
 
   /**
    * Specialty -> group -> student -> semester -> subject. A teacher works
@@ -138,7 +135,7 @@ export function StudentsPage() {
       })
       .filter((s) => s.byGroup.length > 0)
       .sort((a, b) => naturalCompare(a.specialty, b.specialty));
-  }, [filteredRoster, gradesByStudent, subjectFilter, semesterFilter]);
+  }, [filteredRoster, gradesByStudent, subjectFilter, semesterFilter, UNKNOWN]);
 
   const singleStudent =
     bySpecialty.length === 1 && bySpecialty[0].byGroup.length === 1 && bySpecialty[0].byGroup[0].students.length === 1;
@@ -164,15 +161,15 @@ export function StudentsPage() {
       <section className="card">
         <form className="inline-form" onSubmit={(e) => e.preventDefault()}>
           <label>
-            Студент (имейл или фак. №)
+            {t('filters.studentLabel')}
             <input
               value={studentFilter}
               onChange={(e) => setStudentFilter(e.target.value)}
-              placeholder="напр. student1@uni-sofia.bg или 62501"
+              placeholder={t('filters.studentPlaceholder')}
             />
           </label>
           <label>
-            Специалност
+            {t('filters.specialtyLabel')}
             <select
               value={specialtyFilter}
               onChange={(e) => {
@@ -183,7 +180,7 @@ export function StudentsPage() {
                 setGroupFilter('');
               }}
             >
-              <option value="">Всички</option>
+              <option value="">{t('filters.allOption')}</option>
               {specialties.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -192,9 +189,9 @@ export function StudentsPage() {
             </select>
           </label>
           <label>
-            Група
+            {t('filters.groupLabel')}
             <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
-              <option value="">Всички</option>
+              <option value="">{t('filters.allOption')}</option>
               {groupNumbers.map((g) => (
                 <option key={g} value={g}>
                   {g}
@@ -203,9 +200,9 @@ export function StudentsPage() {
             </select>
           </label>
           <label>
-            Предмет
+            {t('filters.subjectLabel')}
             <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
-              <option value="">Всички</option>
+              <option value="">{t('filters.allOption')}</option>
               {subjects.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -214,9 +211,9 @@ export function StudentsPage() {
             </select>
           </label>
           <label>
-            Семестър
+            {t('filters.semesterLabel')}
             <select value={semesterFilter} onChange={(e) => setSemesterFilter(e.target.value)}>
-              <option value="">Всички</option>
+              <option value="">{t('filters.allOption')}</option>
               {semesters.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -229,7 +226,7 @@ export function StudentsPage() {
 
       {loading && (
         <section className="card">
-          <p>Зареждане...</p>
+          <p>{t('common.loading')}</p>
         </section>
       )}
       {error && (
@@ -244,18 +241,18 @@ export function StudentsPage() {
       )}
       {!loading && !error && bySpecialty.length === 0 && (
         <section className="card">
-          <p>Няма студенти, отговарящи на филтъра.</p>
+          <p>{t('students.noStudents')}</p>
         </section>
       )}
 
       {bySpecialty.map(({ specialty, studentCount, byGroup }) => (
         <details className="card" key={specialty} open={bySpecialty.length === 1}>
           <summary>
-            {specialty} <small style={{ opacity: 0.6 }}>({studentCount} студенти)</small>
+            {specialty} <small style={{ opacity: 0.6 }}>({t('students.studentsCount', { count: studentCount })})</small>
           </summary>
           {byGroup.map(({ groupNumber, students: groupStudents }) => (
             <details key={groupNumber} open={byGroup.length === 1}>
-              <summary>Група {groupNumber}</summary>
+              <summary>{t('students.groupHeading', { group: groupNumber })}</summary>
               {groupStudents.map(({ studentUsername, facultyNumber, bySemester }) => (
                 <details key={studentUsername} open={singleStudent}>
                   <summary>
@@ -264,7 +261,7 @@ export function StudentsPage() {
                   </summary>
                   <p>
                     <button type="button" onClick={() => startAdding(studentUsername)}>
-                      Добави оценка
+                      {t('grades.addGrade')}
                     </button>
                   </p>
                   {addingFor === studentUsername && (
@@ -281,23 +278,23 @@ export function StudentsPage() {
                       gradeType={addForm.gradeType}
                       onGradeTypeChange={addForm.setGradeType}
                       submitting={addForm.submitting}
-                      submitLabel="Запиши"
-                      submittingLabel="Записване..."
+                      submitLabel={t('grades.save')}
+                      submittingLabel={t('grades.saving')}
                       onCancel={cancelAdding}
                     />
                   )}
                   {addingFor === studentUsername && addForm.error && <p className="error">{addForm.error}</p>}
-                  {bySemester.length === 0 && <p>Няма въведени оценки.</p>}
+                  {bySemester.length === 0 && <p>{t('grades.noGradesEntered')}</p>}
                   {bySemester.map(({ semester, subjectRows }) => (
                     <table key={semester}>
                       <thead>
                         <tr>
-                          <th colSpan={3}>Семестър {semester}</th>
+                          <th colSpan={3}>{t('grades.semesterHeading', { semester })}</th>
                         </tr>
                         <tr>
-                          <th>Предмет</th>
-                          <th>Оценка</th>
-                          <th>Действие</th>
+                          <th>{t('grades.colSubject')}</th>
+                          <th>{t('grades.colGrade')}</th>
+                          <th>{t('grades.colAction')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -319,8 +316,8 @@ export function StudentsPage() {
                                     gradeType={editor.editGradeType}
                                     onGradeTypeChange={editor.setEditGradeType}
                                     submitting={editor.editSubmitting}
-                                    submitLabel="Запази"
-                                    submittingLabel="Записване..."
+                                    submitLabel={t('common.save')}
+                                    submittingLabel={t('common.saving')}
                                     onCancel={editor.cancelEditing}
                                   />
                                   {editor.editError && <p className="error">{editor.editError}</p>}
@@ -331,11 +328,11 @@ export function StudentsPage() {
                                 <td>{subject}</td>
                                 <td className={g.grade === FAIL_GRADE ? 'grade-btn-fail' : undefined}>
                                   {g.grade}
-                                  <small style={{ opacity: 0.6 }}> ({gradeTypeLabel(g.gradeType)})</small>
+                                  <small style={{ opacity: 0.6 }}> ({gradeTypeLabel(g.gradeType, t)})</small>
                                 </td>
                                 <td className="user-actions">
                                   <button type="button" onClick={() => editor.startEditing(g)}>
-                                    Редактирай
+                                    {t('common.edit')}
                                   </button>
                                   <ConfirmDeleteButton
                                     id={g.id}

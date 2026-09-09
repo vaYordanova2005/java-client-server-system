@@ -148,20 +148,12 @@ export function byCreatedAt(a: Recorded, b: Recorded): number {
 
 export const GRADE_TYPES: GradeType[] = ['TEST', 'ORAL_EXAM', 'CLASS_TEST', 'REGULAR', 'RETAKE'];
 
-export const GRADE_TYPE_LABELS: Record<GradeType, string> = {
-  TEST: 'Тест',
-  ORAL_EXAM: 'Устно изпитване',
-  CLASS_TEST: 'Контролна работа',
-  REGULAR: 'Редовна сесия',
-  RETAKE: 'Поправителна сесия',
-};
-
 /**
- * {@link GRADE_TYPE_LABELS} is indexed by every caller directly, which
- * renders the literal string `undefined` for a type the map doesn't know
- * about — legacy data or a value added on the backend before the frontend
- * catches up. This falls back to a dash instead.
+ * Indexing straight into the `gradeType.*` translations would render the
+ * literal key string for a type the dictionary doesn't know about — legacy
+ * data or a value added on the backend before the frontend catches up. This
+ * falls back to a dash instead.
  */
-export function gradeTypeLabel(type: GradeType | null | undefined): string {
-  return (type && GRADE_TYPE_LABELS[type]) || '—';
+export function gradeTypeLabel(type: GradeType | null | undefined, t: (key: string) => string): string {
+  return type ? t(`gradeType.${type}`) : '—';
 }

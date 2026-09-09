@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import apiClient, { extractErrorMessage } from '../api/client';
+import { translate } from '../i18n/activeTranslator';
 import type { GradeType } from '../types';
 
 /**
@@ -27,7 +28,7 @@ export function useAddGradeForm(reload: () => void) {
   const submit = async (studentUsername: string): Promise<boolean> => {
     setError(null);
     if (semester === '' || grade === '') {
-      setError('Моля, въведете семестър и оценка.');
+      setError(translate('errors.missingSemesterGrade'));
       return false;
     }
     setSubmitting(true);

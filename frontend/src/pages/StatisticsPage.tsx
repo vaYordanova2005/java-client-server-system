@@ -1,6 +1,7 @@
 import { useMemo, type CSSProperties } from 'react';
 import { Layout } from '../routes/Layout';
 import { useAuth } from '../auth/useAuth';
+import { useLanguage } from '../i18n/useLanguage';
 import { useStudentGrades } from '../hooks/useStudentGrades';
 import { useTeacherGrades } from '../hooks/useTeacherGrades';
 import { useAdminGrades } from '../hooks/useAdminGrades';
@@ -42,21 +43,23 @@ function chartY(avg: number): number {
 
 export function StatisticsPage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
 
   if (user?.role === 'STUDENT') return <StudentStatistics />;
   if (user?.role === 'TEACHER') return <TeacherStatistics />;
   if (user?.role === 'ADMIN') return <AdminStatistics />;
 
   return (
-    <Layout title="Статистики">
+    <Layout title={t('statistics.title')}>
       <section className="card">
-        <p>Тази секция е в процес на разработка.</p>
+        <p>{t('statistics.underConstruction')}</p>
       </section>
     </Layout>
   );
 }
 
 function StudentStatistics() {
+  const { t } = useLanguage();
   const { grades, error, loading } = useStudentGrades();
 
   const stats = useMemo(() => {
@@ -127,7 +130,7 @@ function StudentStatistics() {
     <Layout>
       {loading && (
         <section className="card">
-          <p>Зареждане...</p>
+          <p>{t('common.loading')}</p>
         </section>
       )}
       {error && (
@@ -137,7 +140,7 @@ function StudentStatistics() {
       )}
       {!loading && !error && grades.length === 0 && (
         <section className="card">
-          <p>Все още няма вписани оценки.</p>
+          <p>{t('statistics.student.empty')}</p>
         </section>
       )}
 
@@ -148,38 +151,38 @@ function StudentStatistics() {
               <ChartIcon />
               <div>
                 <strong>{stats.overallAvg.toFixed(2)}</strong>
-                <span>Общ успех</span>
+                <span>{t('statistics.student.statOverall')}</span>
               </div>
             </div>
             <div className="stat-tile">
               <JournalIcon />
               <div>
                 <strong>{stats.total}</strong>
-                <span>Оценки</span>
+                <span>{t('statistics.student.statGrades')}</span>
               </div>
             </div>
             <div className="stat-tile" style={{ '--tile-accent': 'var(--success)' } as CSSProperties}>
               <TrophyIcon />
               <div>
                 <strong>{stats.bestSubject ? stats.bestSubject.avg.toFixed(2) : '—'}</strong>
-                <span>{stats.bestSubject?.subject ?? 'Най-силен предмет'}</span>
+                <span>{stats.bestSubject?.subject ?? t('statistics.student.statBestSubject')}</span>
               </div>
             </div>
             <div className="stat-tile">
               <BooksIcon />
               <div>
                 <strong>{stats.retakeCount}</strong>
-                <span>Поправителни</span>
+                <span>{t('statistics.student.statRetakes')}</span>
               </div>
             </div>
           </div>
 
           <section className="card">
-            <h2>Разпределение на оценките</h2>
+            <h2>{t('statistics.student.distributionHeading')}</h2>
             <div className="subject-bars">
               {stats.distribution.map(({ value, count, pct }) => (
                 <div className="subject-bar-row" key={value}>
-                  <span className="subject-bar-label">Оценка {value}</span>
+                  <span className="subject-bar-label">{t('statistics.student.gradeLabel', { value })}</span>
                   <div className="bar-track">
                     <div className="bar-fill" style={{ width: `${pct}%`, background: gradeColor(value) }} />
                   </div>
@@ -193,7 +196,7 @@ function StudentStatistics() {
 
           {stats.semesterAverages.length > 1 && (
             <section className="card">
-              <h2>Тенденция по семестри</h2>
+              <h2>{t('statistics.student.trendHeading')}</h2>
               <div className="trend-chart-wrap">
                 <svg
                   className="trend-chart"
@@ -222,7 +225,7 @@ function StudentStatistics() {
                       textAnchor="middle"
                       className="trend-axis-label"
                     >
-                      Сем. {semester}
+                      {t('statistics.student.semesterAxis', { semester })}
                     </text>
                   ))}
                   <polyline
@@ -247,16 +250,16 @@ function StudentStatistics() {
           )}
 
           <section className="card">
-            <h2>По предмети</h2>
+            <h2>{t('statistics.student.bySubjectHeading')}</h2>
             <div className="subject-matrix-wrap">
               <table className="subject-matrix">
                 <thead>
                   <tr>
-                    <th>Предмет</th>
+                    <th>{t('statistics.student.colSubject')}</th>
                     {stats.presentSemesters.map((semester) => (
-                      <th key={semester}>Сем. {semester}</th>
+                      <th key={semester}>{t('statistics.student.semesterAxis', { semester })}</th>
                     ))}
-                    <th>Среден</th>
+                    <th>{t('statistics.student.colAverage')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -284,15 +287,15 @@ function StudentStatistics() {
 
           {stats.retakeCount > 0 && (
             <section className="card">
-              <h2>Редовна срещу поправителна сесия</h2>
+              <h2>{t('statistics.student.regularVsRetakeHeading')}</h2>
               <div className="retake-split">
                 <div className="retake-tile">
                   <strong>{stats.regularAvg?.toFixed(2) ?? '—'}</strong>
-                  <span>Редовна сесия</span>
+                  <span>{t('statistics.student.regularSession')}</span>
                 </div>
                 <div className="retake-tile">
                   <strong>{stats.retakeAvg?.toFixed(2) ?? '—'}</strong>
-                  <span>Поправителна сесия ({stats.retakeCount})</span>
+                  <span>{t('statistics.student.retakeSession', { count: stats.retakeCount })}</span>
                 </div>
               </div>
             </section>
@@ -304,6 +307,7 @@ function StudentStatistics() {
 }
 
 function TeacherStatistics() {
+  const { t } = useLanguage();
   const { grades, error, loading } = useTeacherGrades();
 
   const stats = useMemo(() => {
@@ -339,7 +343,7 @@ function TeacherStatistics() {
     <Layout>
       {loading && (
         <section className="card">
-          <p>Зареждане...</p>
+          <p>{t('common.loading')}</p>
         </section>
       )}
       {error && (
@@ -349,7 +353,7 @@ function TeacherStatistics() {
       )}
       {!loading && !error && grades.length === 0 && (
         <section className="card">
-          <p>Все още няма въведени оценки.</p>
+          <p>{t('statistics.teacher.empty')}</p>
         </section>
       )}
 
@@ -360,38 +364,38 @@ function TeacherStatistics() {
               <ChartIcon />
               <div>
                 <strong>{stats.overallAvg.toFixed(2)}</strong>
-                <span>Среден успех</span>
+                <span>{t('statistics.teacher.statAverage')}</span>
               </div>
             </div>
             <div className="stat-tile">
               <JournalIcon />
               <div>
                 <strong>{stats.total}</strong>
-                <span>Оценки</span>
+                <span>{t('statistics.teacher.statGrades')}</span>
               </div>
             </div>
             <div className="stat-tile" style={{ '--tile-accent': 'var(--success)' } as CSSProperties}>
               <TrophyIcon />
               <div>
                 <strong>{stats.studentCount}</strong>
-                <span>Студенти</span>
+                <span>{t('statistics.teacher.statStudents')}</span>
               </div>
             </div>
             <div className="stat-tile">
               <BooksIcon />
               <div>
                 <strong>{stats.retakeCount}</strong>
-                <span>Поправителни</span>
+                <span>{t('statistics.teacher.statRetakes')}</span>
               </div>
             </div>
           </div>
 
           <section className="card">
-            <h2>Разпределение на оценките</h2>
+            <h2>{t('statistics.teacher.distributionHeading')}</h2>
             <div className="subject-bars">
               {stats.distribution.map(({ value, count, pct }) => (
                 <div className="subject-bar-row" key={value}>
-                  <span className="subject-bar-label">Оценка {value}</span>
+                  <span className="subject-bar-label">{t('statistics.teacher.gradeLabel', { value })}</span>
                   <div className="bar-track">
                     <div className="bar-fill" style={{ width: `${pct}%`, background: gradeColor(value) }} />
                   </div>
@@ -404,7 +408,7 @@ function TeacherStatistics() {
           </section>
 
           <section className="card">
-            <h2>По предмети</h2>
+            <h2>{t('statistics.teacher.bySubjectHeading')}</h2>
             <div className="subject-bars">
               {stats.subjectAverages.map(({ subject, avg, count }) => (
                 <div className="subject-bar-row" key={subject}>
@@ -422,11 +426,11 @@ function TeacherStatistics() {
 
           {stats.semesterAverages.length > 1 && (
             <section className="card">
-              <h2>Развитие по семестри</h2>
+              <h2>{t('statistics.teacher.progressHeading')}</h2>
               <div className="semester-trend">
                 {stats.semesterAverages.map(({ semester, avg }) => (
                   <div className="semester-pill" key={semester}>
-                    <span className="semester-pill-label">Сем. {semester}</span>
+                    <span className="semester-pill-label">{t('statistics.teacher.semesterLabel', { semester })}</span>
                     <span className="semester-pill-value" style={{ color: tierColor(avg) }}>
                       {avg.toFixed(2)}
                     </span>
@@ -438,15 +442,15 @@ function TeacherStatistics() {
 
           {stats.retakeCount > 0 && (
             <section className="card">
-              <h2>Редовна срещу поправителна сесия</h2>
+              <h2>{t('statistics.teacher.regularVsRetakeHeading')}</h2>
               <div className="retake-split">
                 <div className="retake-tile">
                   <strong>{stats.regularAvg?.toFixed(2) ?? '—'}</strong>
-                  <span>Редовна сесия</span>
+                  <span>{t('statistics.teacher.regularSession')}</span>
                 </div>
                 <div className="retake-tile">
                   <strong>{stats.retakeAvg?.toFixed(2) ?? '—'}</strong>
-                  <span>Поправителна сесия ({stats.retakeCount})</span>
+                  <span>{t('statistics.teacher.retakeSession', { count: stats.retakeCount })}</span>
                 </div>
               </div>
             </section>
@@ -489,6 +493,7 @@ function KeyedAverageBars({ title, entries }: { title: string; entries: { key: s
  * of which a single teacher's own statistics need.
  */
 function AdminStatistics() {
+  const { t } = useLanguage();
   const { grades, error, loading } = useAdminGrades();
 
   const stats = useMemo(() => {
@@ -524,7 +529,7 @@ function AdminStatistics() {
     <Layout>
       {loading && (
         <section className="card">
-          <p>Зареждане...</p>
+          <p>{t('common.loading')}</p>
         </section>
       )}
       {error && (
@@ -534,7 +539,7 @@ function AdminStatistics() {
       )}
       {!loading && !error && grades.length === 0 && (
         <section className="card">
-          <p>Все още няма въведени оценки.</p>
+          <p>{t('statistics.admin.empty')}</p>
         </section>
       )}
 
@@ -545,38 +550,38 @@ function AdminStatistics() {
               <ChartIcon />
               <div>
                 <strong>{stats.overallAvg.toFixed(2)}</strong>
-                <span>Общ успех</span>
+                <span>{t('statistics.admin.statOverall')}</span>
               </div>
             </div>
             <div className="stat-tile">
               <JournalIcon />
               <div>
                 <strong>{stats.total}</strong>
-                <span>Оценки</span>
+                <span>{t('statistics.admin.statGrades')}</span>
               </div>
             </div>
             <div className="stat-tile" style={{ '--tile-accent': 'var(--success)' } as CSSProperties}>
               <StudentsIcon />
               <div>
                 <strong>{stats.studentCount}</strong>
-                <span>Студенти</span>
+                <span>{t('statistics.admin.statStudents')}</span>
               </div>
             </div>
             <div className="stat-tile">
               <TrophyIcon />
               <div>
                 <strong>{stats.passRate.toFixed(0)}%</strong>
-                <span>Успеваемост</span>
+                <span>{t('statistics.admin.statPassRate')}</span>
               </div>
             </div>
           </div>
 
           <section className="card">
-            <h2>Разпределение на оценките</h2>
+            <h2>{t('statistics.admin.distributionHeading')}</h2>
             <div className="subject-bars">
               {stats.distribution.map(({ value, count, pct }) => (
                 <div className="subject-bar-row" key={value}>
-                  <span className="subject-bar-label">Оценка {value}</span>
+                  <span className="subject-bar-label">{t('statistics.admin.gradeLabel', { value })}</span>
                   <div className="bar-track">
                     <div className="bar-fill" style={{ width: `${pct}%`, background: gradeColor(value) }} />
                   </div>
@@ -588,9 +593,9 @@ function AdminStatistics() {
             </div>
           </section>
 
-          <KeyedAverageBars title="По факултет" entries={stats.byFaculty} />
-          <KeyedAverageBars title="По специалност" entries={stats.bySpecialty} />
-          <KeyedAverageBars title="По група" entries={stats.byGroup} />
+          <KeyedAverageBars title={t('statistics.admin.byFaculty')} entries={stats.byFaculty} />
+          <KeyedAverageBars title={t('statistics.admin.bySpecialty')} entries={stats.bySpecialty} />
+          <KeyedAverageBars title={t('statistics.admin.byGroup')} entries={stats.byGroup} />
         </>
       )}
     </Layout>

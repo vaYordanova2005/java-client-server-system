@@ -1,5 +1,6 @@
 import type { FormEvent, ReactNode } from 'react';
 import { GRADE_TYPES, gradeTypeLabel } from '../utils/grades';
+import { useLanguage } from '../i18n/useLanguage';
 import type { GradeType } from '../types';
 
 interface GradeFieldsFormProps {
@@ -47,16 +48,18 @@ export function GradeFieldsForm({
   submittingLabel,
   onCancel,
 }: GradeFieldsFormProps) {
+  const { t } = useLanguage();
+
   return (
     <form onSubmit={onSubmit} className="inline-form">
       {leading}
       <label>
-        Предмет
+        {t('gradeFieldsForm.subjectLabel')}
         <input
           value={subject}
           onChange={(e) => onSubjectChange(e.target.value)}
           list={datalistId}
-          placeholder="напр. Математика"
+          placeholder={t('gradeFieldsForm.subjectPlaceholder')}
           autoComplete="off"
           required
         />
@@ -67,7 +70,7 @@ export function GradeFieldsForm({
         </datalist>
       </label>
       <label>
-        Семестър
+        {t('gradeFieldsForm.semesterLabel')}
         <input
           type="number"
           min={1}
@@ -78,7 +81,7 @@ export function GradeFieldsForm({
         />
       </label>
       <label>
-        Оценка
+        {t('gradeFieldsForm.gradeLabel')}
         <input
           type="number"
           min={2}
@@ -89,11 +92,11 @@ export function GradeFieldsForm({
         />
       </label>
       <label>
-        Тип
+        {t('gradeFieldsForm.typeLabel')}
         <select value={gradeType} onChange={(e) => onGradeTypeChange(e.target.value as GradeType)}>
-          {GRADE_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {gradeTypeLabel(t)}
+          {GRADE_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {gradeTypeLabel(type, t)}
             </option>
           ))}
         </select>
@@ -103,7 +106,7 @@ export function GradeFieldsForm({
       </button>
       {onCancel && (
         <button type="button" onClick={onCancel}>
-          Отказ
+          {t('common.cancel')}
         </button>
       )}
     </form>

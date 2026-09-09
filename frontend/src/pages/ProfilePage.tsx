@@ -2,23 +2,24 @@ import { useState, type FormEvent } from 'react';
 import { extractErrorMessage } from '../api/client';
 import { useAuth } from '../auth/useAuth';
 import { Layout } from '../routes/Layout';
+import { useLanguage } from '../i18n/useLanguage';
 import { useStudentProfile } from '../hooks/useStudentProfile';
 import type { StudentProfileSummary } from '../types';
 
-const PROFILE_FIELDS: { key: keyof StudentProfileSummary; label: string }[] = [
-  { key: 'degreeLevel', label: 'ОКС' },
-  { key: 'facultyNumber', label: 'Фак. номер' },
-  { key: 'faculty', label: 'Факултет' },
-  { key: 'specialty', label: 'Специалност' },
-  { key: 'studyMode', label: 'Вид обучение' },
-  { key: 'specialization', label: 'Специализация' },
-  { key: 'groupNumber', label: 'Група' },
-  { key: 'admissionType', label: 'Вид прием' },
-  { key: 'status', label: 'Състояние' },
-  { key: 'enrolledSemester', label: 'Записан семестър' },
-  { key: 'completedSemester', label: 'Заверен семестър' },
-  { key: 'stream', label: 'Поток' },
-  { key: 'studentUsername', label: 'Имейл' },
+const PROFILE_FIELDS: { key: keyof StudentProfileSummary; labelKey: string }[] = [
+  { key: 'degreeLevel', labelKey: 'profileFields.degreeLevel' },
+  { key: 'facultyNumber', labelKey: 'profileFields.facultyNumber' },
+  { key: 'faculty', labelKey: 'profileFields.faculty' },
+  { key: 'specialty', labelKey: 'profileFields.specialty' },
+  { key: 'studyMode', labelKey: 'profileFields.studyMode' },
+  { key: 'specialization', labelKey: 'profileFields.specialization' },
+  { key: 'groupNumber', labelKey: 'profileFields.groupNumber' },
+  { key: 'admissionType', labelKey: 'profileFields.admissionType' },
+  { key: 'status', labelKey: 'profileFields.status' },
+  { key: 'enrolledSemester', labelKey: 'profileFields.enrolledSemester' },
+  { key: 'completedSemester', labelKey: 'profileFields.completedSemester' },
+  { key: 'stream', labelKey: 'profileFields.stream' },
+  { key: 'studentUsername', labelKey: 'profileFields.email' },
 ];
 
 /**
@@ -31,6 +32,7 @@ function displayValue(value: string | number | null | undefined): string | numbe
 
 export function ProfilePage() {
   const { user, changePassword } = useAuth();
+  const { t } = useLanguage();
   const { profile, error, loading } = useStudentProfile(user?.role === 'STUDENT');
 
   const [currentPassword, setCurrentPassword] = useState('');
@@ -47,7 +49,7 @@ export function ProfilePage() {
     // Checked here as well as on the server: the repeat field only exists to
     // catch a typo, so there is no reason to spend a request on it.
     if (newPassword !== repeatedPassword) {
-      setPasswordError('Двете нови пароли не съвпадат');
+      setPasswordError(t('profile.passwordMismatch'));
       return;
     }
     setSavingPassword(true);
@@ -56,7 +58,7 @@ export function ProfilePage() {
       setCurrentPassword('');
       setNewPassword('');
       setRepeatedPassword('');
-      setPasswordSuccess('Паролата е сменена. Останалите ви сесии са прекратени.');
+      setPasswordSuccess(t('profile.passwordChanged'));
     } catch (err) {
       setPasswordError(extractErrorMessage(err));
     } finally {
@@ -68,14 +70,14 @@ export function ProfilePage() {
     <Layout>
       {user?.role === 'STUDENT' && (
         <section className="card">
-          <h2>Информация за студента</h2>
-          {loading && <p>Зареждане...</p>}
+          <h2>{t('profile.studentInfoHeading')}</h2>
+          {loading && <p>{t('common.loading')}</p>}
           {error && <p className="error">{error}</p>}
           {!loading && !error && profile && (
             <div className="profile-info-grid">
-              {PROFILE_FIELDS.map(({ key, label }) => (
+              {PROFILE_FIELDS.map(({ key, labelKey }) => (
                 <div className="profile-info-row" key={key}>
-                  <span className="profile-info-label">{label}</span>
+                  <span className="profile-info-label">{t(labelKey)}</span>
                   <span className="profile-info-value">{displayValue(profile[key])}</span>
                 </div>
               ))}
@@ -91,10 +93,10 @@ export function ProfilePage() {
       )}
 
       <section className="card">
-        <h2>Смяна на парола</h2>
+        <h2>{t('profile.changePasswordHeading')}</h2>
         <form className="password-form" onSubmit={handleChangePassword}>
           <label>
-            Текуща парола
+            {t('profile.currentPassword')}
             <input
               type="password"
               value={currentPassword}
@@ -104,7 +106,7 @@ export function ProfilePage() {
             />
           </label>
           <label>
-            Нова парола
+            {t('profile.newPassword')}
             <input
               type="password"
               value={newPassword}
@@ -114,7 +116,7 @@ export function ProfilePage() {
             />
           </label>
           <label>
-            Повторете новата парола
+            {t('profile.repeatPassword')}
             <input
               type="password"
               value={repeatedPassword}
@@ -123,13 +125,11 @@ export function ProfilePage() {
               required
             />
           </label>
-          <p className="password-hint">
-            Поне 10 символа, с главна буква, малка буква и цифра, и без потребителското ви име.
-          </p>
+          <p className="password-hint">{t('profile.passwordHint')}</p>
           {passwordError && <p className="error">{passwordError}</p>}
           {passwordSuccess && <p className="success">{passwordSuccess}</p>}
           <button type="submit" disabled={savingPassword}>
-            {savingPassword ? 'Записване...' : 'Смени паролата'}
+            {savingPassword ? t('profile.changing') : t('profile.changeButton')}
           </button>
         </form>
       </section>
